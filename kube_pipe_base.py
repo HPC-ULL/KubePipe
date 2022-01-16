@@ -40,12 +40,6 @@ class Kube_pipe_base:
 
     def __init__(self,*args):
 
-        configuration = argo_workflows.Configuration(host="https://127.0.0.1:2746", discard_unknown_keys=True)
-        configuration.verify_ssl = False
-
-        api_client = argo_workflows.ApiClient(configuration)
-        self.api = workflow_service_api.WorkflowServiceApi(api_client)
-
         self.pipelines = args
 
         self.pipeIds = []
