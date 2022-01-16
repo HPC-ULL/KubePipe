@@ -359,7 +359,7 @@ else:
                             finished.append(workflowName)
 
                         elif(status["phase"] == "Failed"):
-                            self.self.deleteFiles(f"{BUCKET_PATH}/{self.id}/")
+                            self.deleteFiles(f"{BUCKET_PATH}/{self.id}/")
                             raise Exception(f"Workflow {workflowName} has failed\nStatus: {status}")
 
                     sleep(1)
