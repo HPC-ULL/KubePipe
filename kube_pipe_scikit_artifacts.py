@@ -2,7 +2,6 @@ import os
 from time import sleep
 import yaml
 import pickle as pickle
-import pandas as pd
 
 import argo_workflows
 from argo_workflows.api import workflow_service_api
@@ -10,8 +9,6 @@ from argo_workflows.model.io_argoproj_workflow_v1alpha1_workflow_create_request 
     IoArgoprojWorkflowV1alpha1WorkflowCreateRequest
 
 import uuid
-
-from kube_pipe_base import VOLUME_PATH, Kube_pipe_base, kubeconfig
 
 from minio import Minio
 
@@ -22,7 +19,6 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import uuid
-import glob
 import atexit
 
 import datetime
@@ -37,7 +33,7 @@ BUCKET_PATH = ".kubetmp"
 def make_kube_pipeline(*args):
     return Kube_pipe(*args)
 
-class Kube_pipe(Kube_pipe_base):
+class Kube_pipe():
 
     def __init__(self,*args):
 
@@ -87,7 +83,7 @@ class Kube_pipe(Kube_pipe_base):
         if not self.minioclient.bucket_exists(self.bucket):
             self.minioclient.make_bucket(self.bucket)
 
-        atexit.register(self.deleteTemporaryFiles)
+        atexit.register(lambda : self.deleteFiles(f"{BUCKET_PATH}/{self.id}/"))
 
 
     def config(self, resources = None,function_resources = None):
@@ -95,22 +91,28 @@ class Kube_pipe(Kube_pipe_base):
         self.functionresources = function_resources
 
 
-    def uploadVariable(self, var, name):
+    def uploadVariable(self, var, name, prefix = ""):
         with open(f'/tmp/{name}.tmp', 'wb') as handle:
             pickle.dump(var, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        if(prefix!= ""):
+            prefix +="/"
 
         self.minioclient.fput_object(
-            self.bucket, f"{name}", f'/tmp/{name}.tmp',
+            self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f'/tmp/{name}.tmp',
         )
 
         os.remove(f'/tmp/{name}.tmp')
 
 
-    def downloadVariable(self,name):
+    def downloadVariable(self,name, prefix = ""):
 
-        self.minioclient.fget_object(self.bucket, f"{name}", f"/tmp/{name}.tmp")
+        if(prefix!= ""):
+            prefix +="/"
 
+        self.minioclient.fget_object(self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f"/tmp/{name}.tmp")
+
+            
         with open(f"/tmp/{name}.tmp","rb") as outfile:
             var = pickle.load(outfile)
 
@@ -121,8 +123,8 @@ class Kube_pipe(Kube_pipe_base):
 
     def workflow(self,X,y,funcs,name, id, resources = None, fitdata = True, operation= "fit(X,y)"):
         
-        self.uploadVariable(X,f"X{id}")
-        self.uploadVariable(y,f"y{id}")
+        self.uploadVariable(X,f"X{id}", prefix = "tmp")
+        self.uploadVariable(y,f"y{id}", prefix = "tmp")
 
         workflow = {'apiVersion': 'argoproj.io/v1alpha1',
                     'kind': 'Workflow',
@@ -186,9 +188,9 @@ else:
                         'inputs' : {
                             'artifacts':
                                [
-                                    {"name" : f"inX{id}", "path" :  "/tmp/X",    "s3":    { "key" : f"X{id}"}},
-                                    {"name" : f"iny{id}", "path" :  "/tmp/y",    "s3":    { "key" : f"y{id}"}},
-                                    {"name" : f"infunc{i}{id}", "path" : "/tmp/func", "s3": { "key" : f"func{i}{id}" if fitdata or not (hasattr(func,"predict")) else f"output{id}" }}
+                                    {"name" : f"inX{id}", "path" :  "/tmp/X",    "s3":    { "key" : f"{BUCKET_PATH}/{self.id}/tmp/X{id}"}},
+                                    {"name" : f"iny{id}", "path" :  "/tmp/y",    "s3":    { "key" : f"{BUCKET_PATH}/{self.id}/tmp/y{id}"}},
+                                    {"name" : f"infunc{i}{id}", "path" : "/tmp/func", "s3": { "key" : f"{BUCKET_PATH}/{self.id}/func{i}{id}" if fitdata or not (hasattr(func,"predict")) else f"{BUCKET_PATH}/{self.id}/output{id}" }}
                                ]
                         },
                         'outputs' : {
@@ -202,15 +204,14 @@ else:
 
             #Estimator
             if(hasattr(func,"predict")):
-                template["outputs"]["artifacts"].append({"name" : f"output{id}", "path" : "/tmp/out", "archive" : {"none" : {}}, "s3": { "key" : f"output{id}"}})
+                template["outputs"]["artifacts"].append({"name" : f"output{id}", "path" : "/tmp/out", "archive" : {"none" : {}}, "s3": { "key" : f"{BUCKET_PATH}/{self.id}/output{id}"}})
                     
-            
             #Transformer
             else:
-                template["outputs"]["artifacts"].append({"name" : f"outX{id}", "path" : "/tmp/X", "archive" : {"none" : {}}, "s3": { "key" : f"X{id}"}})
+                template["outputs"]["artifacts"].append({"name" : f"outX{id}", "path" : "/tmp/X", "archive" : {"none" : {}}, "s3": { "key" : f"{BUCKET_PATH}/{self.id}/tmp/X{id}"}})
 
                 if(fitdata):
-                    template["outputs"]["artifacts"].append({"name" : f"outfunc{i}{id}", "path" : "/tmp/func", "archive" : {"none" : {}}, "s3": { "key" : f"func{i}{id}"}})
+                    template["outputs"]["artifacts"].append({"name" : f"outfunc{i}{id}", "path" : "/tmp/func", "archive" : {"none" : {}}, "s3": { "key" : f"{BUCKET_PATH}/{self.id}/func{i}{id}"}})
                 
             if(resources is None):
                 resources = self.kuberesources
@@ -235,15 +236,14 @@ else:
         return self.launchFromManifest(workflow)
 
 
-    def deleteTemporaryFiles(self):
-        objects = self.minioclient.list_objects(self.bucket)
-        for obj in objects:
-            self.minioclient.remove_object(self.bucket,obj.object_name)
-        print("Artifacts deleted")
+    def deleteFiles(self, prefix):
+        objects_to_delete = self.minioclient.list_objects(self.bucket, prefix=prefix, recursive=True)
+        for obj in objects_to_delete:
+            self.minioclient.remove_object(self.bucket, obj.object_name)
+        print(f"Artifacts deleted from {prefix}")
 
 
-
-    def runWorkflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None):
+    def runWorkflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = ""):
 
         if pipeIndex == None:
             pipeIndex = range(len(self.pipelines))
@@ -264,13 +264,15 @@ else:
         outputs = []
 
         for i, index in enumerate(pipeIndex):
-            outputs.append(self.downloadVariable(f"output{self.pipelines[index]['id']}"))
+            outputs.append(self.downloadVariable(f"{output}{self.pipelines[index]['id']}"))
 
         return outputs
 
 
     def fit(self,X,y, resources = None):
         self.models = self.runWorkflows(X,y,"fit(X,y)", "fit", True, resources = resources)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
         return self
         
@@ -279,33 +281,41 @@ else:
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating score")
 
-        return self.runWorkflows(X,y,"score(X,y)", "score",  False,  resources = resources, pipeIndex=pipeIndex)
+        out =  self.runWorkflows(X,y,"score(X,y)", "score",  False,  resources = resources, pipeIndex=pipeIndex)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
 
     def transform(self, X, resources = None, pipeIndex = None):
 
         if self.pipelines == None or self.models == None:
             raise Exception("Transformer must be fitted before transform")
 
-        return self.runWorkflows(X, None, None, "transform",  False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1])
+        out =  self.runWorkflows(X, None, None, "transform",  False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X", outputPrefix="tmp")
 
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
-    def inverse_transform(self, X, resources = None, pipeIndex = None):
-
-        if self.pipelines == None or self.models == None:
-            raise Exception("Transformer must be fitted before transform")
-
-        return self.runWorkflows(X, None, None, "inverse_transform",  False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1][::-1])
+        return out
 
 
     def predict(self, X, resources = None, pipeIndex = None):
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating predict")
 
-        return self.runWorkflows(X, None, "predict(X)", "predict", False, resources = resources, pipeIndex = pipeIndex)
+        out =  self.runWorkflows(X, None, "predict(X)", "predict", False, resources = resources, pipeIndex = pipeIndex)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
         
     def fit_predict(self, X, y, resources = None, pipeIndex = None):
 
-        return self.runWorkflows(X, y, "fit_predict(X,y)", "fit_predict", True, resources = resources, pipeIndex = pipeIndex)
+        out = self.runWorkflows(X, y, "fit_predict(X,y)", "fit_predict", True, resources = resources, pipeIndex = pipeIndex)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
 
 
     def config(self, resources = None,function_resources = None):
