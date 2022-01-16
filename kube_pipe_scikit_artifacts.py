@@ -360,7 +360,7 @@ else:
 
                         elif(status["phase"] == "Failed"):
                             self.deleteFiles(f"{BUCKET_PATH}/{self.id}/")
-                            raise Exception(f"Workflow {workflowName} has failed\nStatus: {status}")
+                            raise Exception(f"Workflow {workflowName} has failed")
 
                     sleep(1)
 
