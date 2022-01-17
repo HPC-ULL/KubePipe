@@ -190,7 +190,7 @@ else:
                                [
                                     {"name" : f"inX{id}", "path" :  "/tmp/X",    "s3":    { "key" : f"{BUCKET_PATH}/{self.id}/tmp/X{id}"}},
                                     {"name" : f"iny{id}", "path" :  "/tmp/y",    "s3":    { "key" : f"{BUCKET_PATH}/{self.id}/tmp/y{id}"}},
-                                    {"name" : f"infunc{i}{id}", "path" : "/tmp/func", "s3": { "key" : f"{BUCKET_PATH}/{self.id}/func{i}{id}" if fitdata or not (hasattr(func,"predict")) else f"{BUCKET_PATH}/{self.id}/output{id}" }}
+                                    {"name" : f"infunc{i}{id}", "path" : "/tmp/func", "s3": { "key" : f"{BUCKET_PATH}/{self.id}/func{i}{id}" if fitdata or not (hasattr(func,"predict")) else f"{BUCKET_PATH}/{self.id}/model{id}" }}
                                ]
                         },
                         'outputs' : {
@@ -204,8 +204,11 @@ else:
 
             #Estimator
             if(hasattr(func,"predict")):
-                template["outputs"]["artifacts"].append({"name" : f"output{id}", "path" : "/tmp/out", "archive" : {"none" : {}}, "s3": { "key" : f"{BUCKET_PATH}/{self.id}/output{id}"}})
-                    
+                template["outputs"]["artifacts"].append({"name" : f"output{id}", "path" : "/tmp/out", "archive" : {"none" : {}}, "s3": { "key" : f"{BUCKET_PATH}/{self.id}/tmp/output{id}"}})
+
+                if(fitdata):
+                    template["outputs"]["artifacts"].append({"name" : f"model{id}", "path" : "/tmp/out", "archive" : {"none" : {}}, "s3": { "key" : f"{BUCKET_PATH}/{self.id}/model{id}"}})
+                
             #Transformer
             else:
                 template["outputs"]["artifacts"].append({"name" : f"outX{id}", "path" : "/tmp/X", "archive" : {"none" : {}}, "s3": { "key" : f"{BUCKET_PATH}/{self.id}/tmp/X{id}"}})
@@ -244,33 +247,38 @@ else:
 
 
     def runWorkflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = ""):
+        try:
 
-        if pipeIndex == None:
-            pipeIndex = range(len(self.pipelines))
+            if pipeIndex == None:
+                pipeIndex = range(len(self.pipelines))
 
-        workflowNames = []
-        for i , index in enumerate(pipeIndex):
-            pipeline = self.pipelines[index]
+            workflowNames = []
+            for i , index in enumerate(pipeIndex):
+                pipeline = self.pipelines[index]
 
-            funcs = pipeline["funcs"]
+                funcs = pipeline["funcs"]
 
-            if applyToFuncs is not None and callable(applyToFuncs):
-                funcs = applyToFuncs(funcs)
+                if applyToFuncs is not None and callable(applyToFuncs):
+                    funcs = applyToFuncs(funcs)
 
-            workflowNames.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation))
+                workflowNames.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation))
 
-        self.waitForWorkflows(workflowNames)
+            self.waitForWorkflows(workflowNames)
 
-        outputs = []
+            outputs = []
 
-        for i, index in enumerate(pipeIndex):
-            outputs.append(self.downloadVariable(f"{output}{self.pipelines[index]['id']}"))
+            for i, index in enumerate(pipeIndex):
+                outputs.append(self.downloadVariable(f"{output}{self.pipelines[index]['id']}", prefix = outputPrefix))
 
-        return outputs
+            return outputs
+
+        except Exception as e:
+            self.deleteFiles(f"{BUCKET_PATH}/{self.id}/")
+            raise e
 
 
     def fit(self,X,y, resources = None):
-        self.models = self.runWorkflows(X,y,"fit(X,y)", "fit", True, resources = resources)
+        self.models = self.runWorkflows(X,y,"fit(X,y)", "fit", True, resources = resources,outputPrefix="tmp")
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -281,7 +289,7 @@ else:
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating score")
 
-        out =  self.runWorkflows(X,y,"score(X,y)", "score",  False,  resources = resources, pipeIndex=pipeIndex)
+        out =  self.runWorkflows(X,y,"score(X,y)", "score",  False,  resources = resources, pipeIndex=pipeIndex,outputPrefix="tmp")
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -303,7 +311,7 @@ else:
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating predict")
 
-        out =  self.runWorkflows(X, None, "predict(X)", "predict", False, resources = resources, pipeIndex = pipeIndex)
+        out =  self.runWorkflows(X, None, "predict(X)", "predict", False, resources = resources, pipeIndex = pipeIndex,outputPrefix="tmp")
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -311,7 +319,7 @@ else:
         
     def fit_predict(self, X, y, resources = None, pipeIndex = None):
 
-        out = self.runWorkflows(X, y, "fit_predict(X,y)", "fit_predict", True, resources = resources, pipeIndex = pipeIndex)
+        out = self.runWorkflows(X, y, "fit_predict(X,y)", "fit_predict", True, resources = resources, pipeIndex = pipeIndex,outputPrefix="tmp")
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -355,6 +363,7 @@ else:
                             starttime = workflow["metadata"]["creation_timestamp"]
 
                             print(f"\nWorkflow '{workflowName}' has finished. Time ({endtime-starttime})"u'\u2713')
+                            self.deleteFiles(workflowName)
                             
                             finished.append(workflowName)
 
