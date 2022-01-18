@@ -29,7 +29,7 @@ def fit(*args,**kwargs):
     return pipeline.fit(*args,**kwargs)
 
 model = fit(X_train,y_train)
- """
+"""
 
 #Decorador 2
 """ model = kubeconfig(resources= {"memory" :  "100Mi"})(pipeline.fit)(X_train,y_train) """
@@ -40,9 +40,10 @@ model = fit(X_train,y_train)
 
 
 #Recursos en pipeline.con
-pipeline.config( resources = {"memory" :  "100Mi"}, function_resources = { LogisticRegression()     : {"memory" :  "200Mi"}, 
-                                                                           RandomForestClassifier() : {"memory" :  "50Mi" } } )
+pipeline.config( resources = {"memory" :  "100Mi"}, concurrent_pipelines = 1,  function_resources = { LogisticRegression()     : {"memory" :  "200Mi"}, 
+                                                                                                      RandomForestClassifier() : {"memory" :  "50Mi" } } )
                                                                       
-model = pipeline.fit(X_train,y_train)
+model = pipeline.fit(X_train,y_train, concurrent_pipelines=10)
 
 print("Precision del pipeline : {} %".format( model.score(X_test,y_test)))
+

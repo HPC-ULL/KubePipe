@@ -49,7 +49,9 @@ class Kube_pipe():
 
         self.kuberesources = None
 
-        self.functionresources = {}
+        self.concurrent_pipelines = None
+
+        self.function_resources = {}
 
         self.namespace = "argo"
 
@@ -88,7 +90,7 @@ class Kube_pipe():
 
     def config(self, resources = None,function_resources = None):
         self.kuberesources = resources
-        self.functionresources = function_resources
+        self.function_resources = function_resources
 
 
     def uploadVariable(self, var, name, prefix = ""):
@@ -219,11 +221,11 @@ else:
             if(resources is None):
                 resources = self.kuberesources
 
-            if(self.functionresources.get(func,None) is not None):
-                resources = self.functionresources.get(func)
+            if(self.function_resources.get(func,None) is not None):
+                resources = self.function_resources.get(func)
 
             if(resources is not None):
-                template["container"]["resources"]  = {"limits" : resources}
+                template["container"]["resources"]  = {"requests" : resources}
 
 
             template["container"]["args"][0] = code
@@ -246,89 +248,101 @@ else:
         print(f"Artifacts deleted from {prefix}")
 
 
-    def runWorkflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = ""):
-        try:
+    def runWorkflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None):
 
-            if pipeIndex == None:
-                pipeIndex = range(len(self.pipelines))
+        if pipeIndex == None:
+            pipeIndex = range(len(self.pipelines))
 
-            workflowNames = []
-            for i , index in enumerate(pipeIndex):
-                pipeline = self.pipelines[index]
+        
+        if concurrent_pipelines == None:
+            if(self.concurrent_pipelines != None):
+                concurrent_pipelines = self.concurrent_pipelines
+            else:
+                concurrent_pipelines = len(self.pipelines)
 
-                funcs = pipeline["funcs"]
+        workflowNames = []
 
-                if applyToFuncs is not None and callable(applyToFuncs):
-                    funcs = applyToFuncs(funcs)
+        for i , index in enumerate(pipeIndex):
 
-                workflowNames.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation))
+            #Check that no more than "concurrent_pipelines" are running at the same time, wait for a workflow to finish
+            if(len(workflowNames) >= concurrent_pipelines):
+                finished = self.waitForWorkflows(workflowNames,numberToWait=1)[0]
+                workflowNames.remove(finished)
+        
+            pipeline = self.pipelines[index]
 
+            funcs = pipeline["funcs"]
+
+            if applyToFuncs is not None and callable(applyToFuncs):
+                funcs = applyToFuncs(funcs)
+
+            workflowNames.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation))
+        
+        if(len(workflowNames) > 0):
             self.waitForWorkflows(workflowNames)
+        
+        outputs = []
 
-            outputs = []
+        for i, index in enumerate(pipeIndex):
+            outputs.append(self.downloadVariable(f"{output}{self.pipelines[index]['id']}", prefix = outputPrefix))
 
-            for i, index in enumerate(pipeIndex):
-                outputs.append(self.downloadVariable(f"{output}{self.pipelines[index]['id']}", prefix = outputPrefix))
-
-            return outputs
-
-        except Exception as e:
-            self.deleteFiles(f"{BUCKET_PATH}/{self.id}/")
-            raise e
+        return outputs
 
 
-    def fit(self,X,y, resources = None):
-        self.models = self.runWorkflows(X,y,"fit(X,y)", "fit", True, resources = resources,outputPrefix="tmp")
+
+    def fit(self,X,y, resources = None, concurrent_pipelines = None):
+        self.models = self.runWorkflows(X,y,"fit(X,y)", "fit", True, resources = resources, concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
         return self
         
-    def score(self,X,y, resources = None, pipeIndex = None):
+    def score(self,X,y, resources = None, pipeIndex = None, concurrent_pipelines = None):
 
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating score")
 
-        out =  self.runWorkflows(X,y,"score(X,y)", "score",  False,  resources = resources, pipeIndex=pipeIndex,outputPrefix="tmp")
+        out =  self.runWorkflows(X,y,"score(X,y)", "score",  False,  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
         return out
 
-    def transform(self, X, resources = None, pipeIndex = None):
+    def transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
 
         if self.pipelines == None or self.models == None:
             raise Exception("Transformer must be fitted before transform")
 
-        out =  self.runWorkflows(X, None, None, "transform",  False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X", outputPrefix="tmp")
+        out =  self.runWorkflows(X, None, None, "transform",  False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X",concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
         return out
 
 
-    def predict(self, X, resources = None, pipeIndex = None):
+    def predict(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating predict")
 
-        out =  self.runWorkflows(X, None, "predict(X)", "predict", False, resources = resources, pipeIndex = pipeIndex,outputPrefix="tmp")
+        out =  self.runWorkflows(X, None, "predict(X)", "predict", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
         return out
         
-    def fit_predict(self, X, y, resources = None, pipeIndex = None):
+    def fit_predict(self, X, y, resources = None, pipeIndex = None, concurrent_pipelines = None):
 
-        out = self.runWorkflows(X, y, "fit_predict(X,y)", "fit_predict", True, resources = resources, pipeIndex = pipeIndex,outputPrefix="tmp")
+        out = self.runWorkflows(X, y, "fit_predict(X,y)", "fit_predict", True, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
         return out
 
 
-    def config(self, resources = None,function_resources = None):
+    def config(self, resources = None,function_resources = None, concurrent_pipelines = None):
         self.kuberesources = resources
-        self.functionresources = function_resources
+        self.function_resources = function_resources
+        self.concurrent_pipelines = concurrent_pipelines
 
 
     def launchFromManifest(self,manifest):
@@ -341,11 +355,14 @@ else:
         return name
 
 
-    def waitForWorkflows(self,workflowNames):
+    def waitForWorkflows(self,workflowNames, numberToWait = None):
+
+        if(numberToWait == None):
+            numberToWait = len(workflowNames)    
         
         finished = []
 
-        while len(finished) < len(workflowNames):
+        while len(finished) < numberToWait:
 
             for workflowName in workflowNames:
                 if(workflowName not in finished):
@@ -374,6 +391,18 @@ else:
                     sleep(1)
 
                     print(".",end="",sep="",flush=True)
+
+        return finished
+
+
+    def getWorkflowStatus(self, workflowName):
+        try:
+            workflow = self.api.get_workflow(namespace=self.namespace,name = workflowName)
+            return workflow["status"]
+
+        except NotFoundException:
+            return None
+
 
 
     def waitForWorkflow(self,workflowName):
