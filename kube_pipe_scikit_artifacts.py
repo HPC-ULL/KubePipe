@@ -260,14 +260,15 @@ else:
             else:
                 concurrent_pipelines = len(self.pipelines)
 
-        workflowNames = []
+        workflows = []
 
         for i , index in enumerate(pipeIndex):
 
             #Check that no more than "concurrent_pipelines" are running at the same time, wait for a workflow to finish
-            if(len(workflowNames) >= concurrent_pipelines):
-                finished = self.waitForWorkflows(workflowNames,numberToWait=1)[0]
-                workflowNames.remove(finished)
+            if(len(workflows) >= concurrent_pipelines):
+                finishedWorkflows = self.waitForWorkflows(workflows,numberToWait=1)
+                for workflow in finishedWorkflows:
+                    workflows.remove(workflow)
         
             pipeline = self.pipelines[index]
 
@@ -276,10 +277,10 @@ else:
             if applyToFuncs is not None and callable(applyToFuncs):
                 funcs = applyToFuncs(funcs)
 
-            workflowNames.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation))
+            workflows.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation))
         
-        if(len(workflowNames) > 0):
-            self.waitForWorkflows(workflowNames)
+        if(len(workflows) > 0):
+            self.waitForWorkflows(workflows)
         
         outputs = []
 
