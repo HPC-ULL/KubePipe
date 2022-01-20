@@ -39,11 +39,11 @@ model = fit(X_train,y_train)
 """ model = pipeline.fit(X_train,y_train, resources = {"memory" :  "100Mi"}) """
 
 
-#Recursos en pipeline.con
+#Recursos en pipeline.config
 pipeline.config( resources = {"memory" :  "100Mi"}, concurrent_pipelines = 1,  function_resources = { LogisticRegression()     : {"memory" :  "200Mi"}, 
                                                                                                       RandomForestClassifier() : {"memory" :  "50Mi" } } )
                                                                       
 model = pipeline.fit(X_train,y_train, concurrent_pipelines=10)
 
-print("Precision del pipeline : {} %".format( model.score(X_test,y_test)))
+print("Precision del pipeline : {} %".format( model.score(X_test,y_test) ))
 

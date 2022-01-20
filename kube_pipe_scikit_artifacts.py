@@ -35,7 +35,7 @@ def make_kube_pipeline(*args):
 
 class Kube_pipe():
 
-    def __init__(self,*args):
+    def __init__(self,*args, namespace = "argo", tmpFolder = "/tmp"):
 
         self.id = str(uuid.uuid4())[:8]
         
@@ -46,6 +46,7 @@ class Kube_pipe():
                 "funcs" : arg
             })
 
+        self.tmpFolder = tmpFolder
 
         self.kuberesources = None
 
@@ -53,7 +54,7 @@ class Kube_pipe():
 
         self.function_resources = {}
 
-        self.namespace = "argo"
+        self.namespace = namespace
 
 
         config.load_kube_config()
@@ -101,7 +102,7 @@ class Kube_pipe():
             prefix +="/"
 
         self.minioclient.fput_object(
-            self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f'/tmp/{name}.tmp',
+            self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f'{self.tmpFolder}/{name}.tmp',
         )
 
         os.remove(f'/tmp/{name}.tmp')
@@ -112,7 +113,7 @@ class Kube_pipe():
         if(prefix!= ""):
             prefix +="/"
 
-        self.minioclient.fget_object(self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f"/tmp/{name}.tmp")
+        self.minioclient.fget_object(self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f"{self.tmpFolder}/{name}.tmp")
 
             
         with open(f"/tmp/{name}.tmp","rb") as outfile:
