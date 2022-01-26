@@ -4,13 +4,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import RandomForestClassifier
-import numpy as np
-import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn import datasets
 
-from kube_pipe_scikit_artifacts import make_kube_pipeline
+from kube_pipe_scikit_artifacts import make_kube_pipeline, Kube_pipe
 
 
 iris = datasets.load_iris()
@@ -19,31 +17,24 @@ X_train,X_test, y_train, y_test = train_test_split(iris.data,iris.target,test_si
 
 
 #Creación de los pipelines
-pipeline = make_kube_pipeline([OneHotEncoder(handle_unknown="ignore"), LogisticRegression()],
-                              [OneHotEncoder(handle_unknown="ignore"), RandomForestClassifier()])
-
-
-#Decorador 1
-""" @kubeconfig(resources= {"memory" :  "100Mi"})
-def fit(*args,**kwargs):
-    return pipeline.fit(*args,**kwargs)
-
-model = fit(X_train,y_train)
-"""
-
-#Decorador 2
-""" model = kubeconfig(resources= {"memory" :  "100Mi"})(pipeline.fit)(X_train,y_train) """
-
-
-#Recursos en llamada al fit
-""" model = pipeline.fit(X_train,y_train, resources = {"memory" :  "100Mi"}) """
+pipeline = Kube_pipe([OneHotEncoder(handle_unknown="ignore"), LogisticRegression()],
+                     [OneHotEncoder(handle_unknown="ignore"), RandomForestClassifier()]
+                    )
 
 
 #Recursos en pipeline.config
 pipeline.config( resources = {"memory" :  "100Mi"}, concurrent_pipelines = 1,  function_resources = { LogisticRegression()     : {"memory" :  "200Mi"}, 
-                                                                                                      RandomForestClassifier() : {"memory" :  "50Mi" } } )
+                                                                                                      RandomForestClassifier() : {"memory" :  "50Mi" } }, tmpFolder = "/home/bejeque/dsuarezl/.kubetmp" )
                                                                       
-model = pipeline.fit(X_train,y_train, concurrent_pipelines=10)
+pipeline.fit(X_train,y_train, concurrent_pipelines=10)
 
-print("Precision del pipeline : {} %".format( model.score(X_test,y_test) ))
+"""
+
+print("Precision del pipeline : {} %".format( pipeline.score(X_test,y_test) ))
+ """
+
+X_test = pipeline.transform(X_test)[1]
+model = pipeline.getModel(1)
+
+print(model.score(X_test,y_test))
 

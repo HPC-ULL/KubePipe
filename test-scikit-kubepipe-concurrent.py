@@ -1,4 +1,5 @@
 
+import queue
 import pandas as pd
 from sklearn.pipeline import make_pipeline
 
@@ -25,6 +26,10 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
+from multiprocessing import Process
+from multiprocessing import Queue
+
+
 import subprocess
 import csv
 
@@ -34,8 +39,8 @@ import math
 
 workdir = f"{os.path.dirname(os.path.realpath(__file__))}/test-results"
 
-test_samples = test_samples = [100,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,20000,30000,40000,50000,60000,70000,80000,90000,100000,200000,300000,400000,500000,600000,700000,800000,900000,1000000]
-#test_samples = [10,10]
+#test_samples = test_samples = [700000,800000,900000,1000000]
+test_samples = [10,10]
 
 NUMBER_OF_FEATURES = 5
 
@@ -54,7 +59,7 @@ clasifiers = [
             
             ]
 
-kubepipelines = make_kube_pipeline(*clasifiers)
+kubepipelines = make_kube_pipeline(*clasifiers , tmpFolder = "/home/bejeque/dsuarezl/.kubetmp")
 
 scikitPipelines = []
 
@@ -74,16 +79,17 @@ def mean(arr):
     
     return sum/len(arr)
 
-def test(pipelines,testTimes,X_train,y_train, concurrent = None):
+def test(pipelines,testTimes,X_train,y_train, concurrent = None,queue = None):
     times = []
 
     for i in range(testTimes):
-        inicio = time.time()
 
         if(isinstance(pipelines,Kube_pipe)):
+            inicio = time.time()
             pipelines.fit(X_train,y_train, concurrent_pipelines = concurrent)
 
         else:
+            inicio = time.time()
             for pipeline in pipelines:
                 pipeline.fit(X_train, y_train)
 
@@ -92,9 +98,11 @@ def test(pipelines,testTimes,X_train,y_train, concurrent = None):
         times.append(fin-inicio)
 
         str(datetime.timedelta(seconds=fin-inicio))
-        print(times)
+    
+    print(times)
 
-        return times
+    queue.put(times)
+    return times
 
 now = datetime.datetime.now().strftime("%d-%m_%H:%M")
 
@@ -125,7 +133,9 @@ scikitTimes = []
 kubeTimes = []
 speedUps = []
 
-OUTLIER_UMBRAL = 10
+OUTLIER_UMBRAL = 3
+
+queue = Queue()
 
 try:
     with open(f"{workdir}/{now}/summary.txt", "a") as f:
@@ -136,7 +146,12 @@ try:
 
             f.write(f"{n_sample} samples:\n")
 
-            scikitTimes.append(mean(test(scikitPipelines,NUMBER_OF_TEST,X,y)))
+            
+            p = Process(target=test, args=(scikitPipelines,NUMBER_OF_TEST,X,y),kwargs={"queue" : queue})
+            p.start()
+            p.join()
+
+            scikitTimes.append(mean(queue.get()))
             f.write(f"Scikit Pipeline:    \t {scikitTimes[i]} seconds\n")
 
             kubeTimes.append([])
@@ -168,11 +183,8 @@ try:
         
             del X
             del y
-            del kubepipelines
 
             gc.collect()
-
-            kubepipelines = make_kube_pipeline(*clasifiers)
 
             f.flush()
             os.fsync(f)
