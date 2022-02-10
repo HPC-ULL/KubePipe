@@ -42,7 +42,7 @@ class Kube_pipe():
         self.pipelines = []
         for arg in args:
             self.pipelines.append({
-                "id" : str(uuid.uuid4())[:8],
+                "id" : str(uuid.uuid4())[:10],
                 "funcs" : arg
             })
 
@@ -123,17 +123,15 @@ class Kube_pipe():
 
     def workflow(self,X,y,funcs,name, pipeId, resources = None, fitdata = True, operation= "fit(X,y)"):
 
-        self.uploadVariable(X,f"X{pipeId}", prefix = "tmp")
-        self.uploadVariable(y,f"y{pipeId}", prefix = "tmp")
-
         workflow = {'apiVersion': 'argoproj.io/v1alpha1',
                     'kind': 'Workflow',
                     'metadata': {'generateName': 'pipeline'},
                     'spec': {'entrypoint': 'pipeline-template',
                             'retryStrategy': {'limit': '2'},
                             'templates': [{'name': 'pipeline-template', 'steps': None}],
-                            'ttlStrategy': {
-                                            'secondsAfterSuccess': 20}}}
+                            #'ttlStrategy': {
+                            #                'secondsAfterSuccess': 20}
+                                            }}
 
 
         templates = workflow["spec"]["templates"]
@@ -411,6 +409,8 @@ else:
             body=IoArgoprojWorkflowV1alpha1WorkflowCreateRequest(workflow=manifest, _check_type=False))
 
         name = api_response["metadata"]["name"]
+
+        
         print(f"Launched workflow '{name}'")
         return name
 
@@ -426,31 +426,31 @@ else:
 
             for workflowName in workflowNames:
                 if(workflowName not in finished):
-                    try:
-                        workflow = self.api.get_workflow(namespace=self.namespace,name = workflowName)
-                    except NotFoundException:
-                        pass
+                    workflow = None
+                    
+                    workflow = self.api.get_workflow(namespace=self.namespace,name = workflowName)
+                    
+                    if(workflow is not None):
+                        status = workflow["status"]
+                    
+                        if(getattr(status,"phase",None) is not None):
 
-                    status = workflow["status"]
-                
-                    if(getattr(status,"phase",None) is not None):
+                            if(status["phase"] == "Succeeded"):
+                                endtime = datetime.datetime.now(tzutc())
+                                starttime = workflow["metadata"]["creation_timestamp"]
 
-                        if(status["phase"] == "Succeeded"):
-                            endtime = datetime.datetime.now(tzutc())
-                            starttime = workflow["metadata"]["creation_timestamp"]
+                                print(f"\nWorkflow '{workflowName}' has finished. Time ({endtime-starttime})"u'\u2713')
+                                self.deleteFiles(workflowName)
+                                
+                                finished.append(workflowName)
 
-                            print(f"\nWorkflow '{workflowName}' has finished. Time ({endtime-starttime})"u'\u2713')
-                            self.deleteFiles(workflowName)
-                            
-                            finished.append(workflowName)
+                            elif(status["phase"] == "Failed"):
+                                self.deleteFiles(f"{BUCKET_PATH}/{self.id}/")
+                                raise Exception(f"Workflow {workflowName} has failed")
 
-                        elif(status["phase"] == "Failed"):
-                            self.deleteFiles(f"{BUCKET_PATH}/{self.id}/")
-                            raise Exception(f"Workflow {workflowName} has failed")
+                        sleep(1)
 
-                    sleep(1)
-
-                    print(".",end="",sep="",flush=True)
+                        print(".",end="",sep="",flush=True)
 
         return finished
 
