@@ -178,6 +178,7 @@ else:
 """    
 
             template = {
+
                         'container': 
                             {'args': [''],
                             'command': ['python', '-c'],
@@ -187,7 +188,7 @@ else:
                             'artifacts':
                                [
                                     {"name" : f"inX{pipeId}", "path" :  "/tmp/X",    "s3":    { "key" : f"{BUCKET_PATH}/{self.id}/tmp/X{pipeId}" if i >= 1 else f"{BUCKET_PATH}/{self.id}/tmp/X" }} ,
-                                    {"name" : f"iny{pipeId}", "path" :  "/tmp/y",    "s3":    { "key" : f"{BUCKET_PATH}/{self.id}/tmp/y{pipeId}" if i >= 1 else f"{BUCKET_PATH}/{self.id}/tmp/y" }},
+                                    {"name" : f"iny{pipeId}", "path" :  "/tmp/y",    "s3":    {  "key" : f"{BUCKET_PATH}/{self.id}/tmp/y" }},
                                     {"name" : f"infunc{i}{pipeId}", "path" : "/tmp/func", "s3": { "key" : f"{BUCKET_PATH}/{self.id}/func{id(func)}{pipeId}" if fitdata or not (hasattr(func,"predict")) else f"{BUCKET_PATH}/{self.id}/model{pipeId}" }}
                                ]
                         },
@@ -440,7 +441,7 @@ else:
                                 starttime = workflow["metadata"]["creation_timestamp"]
 
                                 print(f"\nWorkflow '{workflowName}' has finished. Time ({endtime-starttime})"u'\u2713')
-                                self.deleteFiles(workflowName)
+                                #self.deleteFiles(workflowName)
                                 
                                 finished.append(workflowName)
 

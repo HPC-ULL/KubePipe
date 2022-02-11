@@ -39,8 +39,20 @@ import math
 
 workdir = f"{os.path.dirname(os.path.realpath(__file__))}/test-results"
 
-#test_samples = test_samples = [700000,800000,900000,1000000]
-test_samples = [10,10]
+test_samples = test_samples = [3000000, 4000000, 5000000]
+
+
+#test_samples = [10,10]
+
+""" 
+test_samples = []
+for i in range(3,7):
+    for j in range(1,11):
+        number = j*pow(10,i)
+        if(number not in test_samples):
+            test_samples.append(number) 
+"""
+
 
 NUMBER_OF_FEATURES = 5
 
@@ -49,17 +61,58 @@ NUMBER_OF_TEST = 1
 
 
 
-clasifiers = [  
+clasifiers = [  #40
 
-                [StandardScaler(), LogisticRegression()],
-                [StandardScaler(), DecisionTreeClassifier()],
-                [StandardScaler(), RandomForestClassifier()],
-                [StandardScaler(), KNeighborsClassifier()],
-                [StandardScaler(), AdaBoostClassifier()]
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+                [StandardScaler(), AdaBoostClassifier()],
+
+                
             
             ]
 
-kubepipelines = make_kube_pipeline(*clasifiers , tmpFolder = "/home/bejeque/dsuarezl/.kubetmp")
+kubepipelines = make_kube_pipeline(*clasifiers)
+kubepipelines.config(tmpFolder = "/home/bejeque/dsuarezl/.kubetmp")
 
 scikitPipelines = []
 
@@ -101,7 +154,8 @@ def test(pipelines,testTimes,X_train,y_train, concurrent = None,queue = None):
     
     print(times)
 
-    queue.put(times)
+    if(queue): queue.put(times)
+
     return times
 
 now = datetime.datetime.now().strftime("%d-%m_%H:%M")
@@ -147,17 +201,19 @@ try:
             f.write(f"{n_sample} samples:\n")
 
             
-            p = Process(target=test, args=(scikitPipelines,NUMBER_OF_TEST,X,y),kwargs={"queue" : queue})
+            p = Process(target=test, args=(scikitPipelines,NUMBER_OF_TEST,X,y), kwargs={"queue" : queue})
             p.start()
             p.join()
 
+            print("Launched scikit test")
             scikitTimes.append(mean(queue.get()))
-            f.write(f"Scikit Pipeline:    \t {scikitTimes[i]} seconds\n")
+            f.write(f"Scikit Pipeline:    \t {scikitTimes[-1]} seconds\n")
 
             kubeTimes.append([])
             speedUps.append([])
 
             for conc in range(1,len(clasifiers)+1):
+                print(f"Launched kubernetes test {conc} concurrents")
 
                 kubetime = mean(test(kubepipelines,NUMBER_OF_TEST,X,y,concurrent = conc))
 
@@ -167,8 +223,10 @@ try:
                 kubeTimes[i].append(kubetime)
                 
                 speedUps[i].append(scikitTimes[i]/kubeTimes[i][-1])
-                
 
+                print("\n\n")
+                
+            print(f"Results of {n_sample}:\nKubernetes: {kubeTimes[i]}\nScikit: {scikitTimes[i]}\n")
             f.write(f"Kubernetes Pipeline:\t {kubeTimes[i]} seconds\n")
 
             f.write(f"Speedup:            \t {speedUps[i]}\n")

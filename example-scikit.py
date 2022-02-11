@@ -18,7 +18,10 @@ X_train,X_test, y_train, y_test = train_test_split(iris.data,iris.target,test_si
 
 #Creación de los pipelines
 pipeline = Kube_pipe([OneHotEncoder(handle_unknown="ignore"), LogisticRegression()],
-                     [OneHotEncoder(handle_unknown="ignore"), RandomForestClassifier()]
+                     [OneHotEncoder(handle_unknown="ignore"), RandomForestClassifier()],
+
+                     argo_ip = "https://172.31.1.31:30366",
+                     minio_ip =  "172.31.1.31:30271"
                     )
 
 

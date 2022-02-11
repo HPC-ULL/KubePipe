@@ -1,0 +1,541 @@
+[1, 2, 4, 8, 16, 32, 40]
+[3.1161625385284424]
+Launched scikit test
+Launched kubernetes test 1 concurrents
+Launched workflow '0-adaboostclassifier-fit-86296d52-4kk7pl'
+....................
+Workflow '0-adaboostclassifier-fit-86296d52-4kk7pl' has finished. Time (0:00:20.879032)✓
+.Launched workflow '1-adaboostclassifier-fit-a234ac3a-9s9qrz'
+....................
+Workflow '1-adaboostclassifier-fit-a234ac3a-9s9qrz' has finished. Time (0:00:21.497894)✓
+.Launched workflow '2-adaboostclassifier-fit-bcc99617-8zfk69'
+....................
+Workflow '2-adaboostclassifier-fit-bcc99617-8zfk69' has finished. Time (0:00:21.111959)✓
+.Launched workflow '3-adaboostclassifier-fit-b68b8e54-eft8n4'
+....................
+Workflow '3-adaboostclassifier-fit-b68b8e54-eft8n4' has finished. Time (0:00:20.726551)✓
+.Launched workflow '4-adaboostclassifier-fit-e35b2648-dnth5p'
+....................
+Workflow '4-adaboostclassifier-fit-e35b2648-dnth5p' has finished. Time (0:00:21.340463)✓
+.Launched workflow '5-adaboostclassifier-fit-ab34d9e9-2mwkwh'
+....................
+Workflow '5-adaboostclassifier-fit-ab34d9e9-2mwkwh' has finished. Time (0:00:20.949442)✓
+.Launched workflow '6-adaboostclassifier-fit-ce1a0df3-5dmw5k'
+....................
+Workflow '6-adaboostclassifier-fit-ce1a0df3-5dmw5k' has finished. Time (0:00:21.578394)✓
+.Launched workflow '7-adaboostclassifier-fit-aaf15c61-bh868q'
+....................
+Workflow '7-adaboostclassifier-fit-aaf15c61-bh868q' has finished. Time (0:00:21.193099)✓
+.Launched workflow '8-adaboostclassifier-fit-e436dea2-efcvrx'
+....................
+Workflow '8-adaboostclassifier-fit-e436dea2-efcvrx' has finished. Time (0:00:20.824036)✓
+.Launched workflow '9-adaboostclassifier-fit-d2d93ead-8gdmbb'
+....................
+Workflow '9-adaboostclassifier-fit-d2d93ead-8gdmbb' has finished. Time (0:00:21.451082)✓
+.Launched workflow '10-adaboostclassifier-fit-99f9c3eb-ab9dxw'
+....................
+Workflow '10-adaboostclassifier-fit-99f9c3eb-ab9dxw' has finished. Time (0:00:21.084231)✓
+.Launched workflow '11-adaboostclassifier-fit-8eac8183-e5447s'
+....................
+Workflow '11-adaboostclassifier-fit-8eac8183-e5447s' has finished. Time (0:00:20.700218)✓
+.Launched workflow '12-adaboostclassifier-fit-c4a8d0a3-9ft5db'
+....................
+Workflow '12-adaboostclassifier-fit-c4a8d0a3-9ft5db' has finished. Time (0:00:21.337116)✓
+.Launched workflow '13-adaboostclassifier-fit-46b7b8f3-89vh96'
+....................
+Workflow '13-adaboostclassifier-fit-46b7b8f3-89vh96' has finished. Time (0:00:20.947858)✓
+.Launched workflow '14-adaboostclassifier-fit-22490769-6mtcc5'
+....................
+Workflow '14-adaboostclassifier-fit-22490769-6mtcc5' has finished. Time (0:00:21.576264)✓
+.Launched workflow '15-adaboostclassifier-fit-cec44166-45skl4'
+....................
+Workflow '15-adaboostclassifier-fit-cec44166-45skl4' has finished. Time (0:00:21.201535)✓
+.Launched workflow '16-adaboostclassifier-fit-733c65b2-7wctpc'
+....................
+Workflow '16-adaboostclassifier-fit-733c65b2-7wctpc' has finished. Time (0:00:20.834136)✓
+.Launched workflow '17-adaboostclassifier-fit-0277cc5c-cvf75t'
+....................
+Workflow '17-adaboostclassifier-fit-0277cc5c-cvf75t' has finished. Time (0:00:21.444632)✓
+.Launched workflow '18-adaboostclassifier-fit-fcd593fc-bxtj4z'
+....................
+Workflow '18-adaboostclassifier-fit-fcd593fc-bxtj4z' has finished. Time (0:00:21.120899)✓
+.Launched workflow '19-adaboostclassifier-fit-c833c0cc-dbpx7j'
+....................
+Workflow '19-adaboostclassifier-fit-c833c0cc-dbpx7j' has finished. Time (0:00:20.736239)✓
+.Launched workflow '20-adaboostclassifier-fit-478659c3-6q7xxs'
+....................
+Workflow '20-adaboostclassifier-fit-478659c3-6q7xxs' has finished. Time (0:00:21.364272)✓
+.Launched workflow '21-adaboostclassifier-fit-87d73396-d67ts4'
+....................
+Workflow '21-adaboostclassifier-fit-87d73396-d67ts4' has finished. Time (0:00:20.983976)✓
+.Launched workflow '22-adaboostclassifier-fit-250fc0e0-15nrfv'
+....................
+Workflow '22-adaboostclassifier-fit-250fc0e0-15nrfv' has finished. Time (0:00:20.604573)✓
+.Launched workflow '23-adaboostclassifier-fit-1fd8d282-472gwc'
+....................
+Workflow '23-adaboostclassifier-fit-1fd8d282-472gwc' has finished. Time (0:00:21.214958)✓
+.Launched workflow '24-adaboostclassifier-fit-950a157b-4ps22h'
+....................
+Workflow '24-adaboostclassifier-fit-950a157b-4ps22h' has finished. Time (0:00:20.845883)✓
+.Launched workflow '25-adaboostclassifier-fit-1f667ba6-1dcd8w'
+....................
+Workflow '25-adaboostclassifier-fit-1f667ba6-1dcd8w' has finished. Time (0:00:21.453772)✓
+.Launched workflow '26-adaboostclassifier-fit-369d12fd-98fh42'
+....................
+Workflow '26-adaboostclassifier-fit-369d12fd-98fh42' has finished. Time (0:00:21.100449)✓
+.Launched workflow '27-adaboostclassifier-fit-dc374f58-dzr8q4'
+....................
+Workflow '27-adaboostclassifier-fit-dc374f58-dzr8q4' has finished. Time (0:00:20.717991)✓
+.Launched workflow '28-adaboostclassifier-fit-3e6a1e62-a45hfn'
+....................
+Workflow '28-adaboostclassifier-fit-3e6a1e62-a45hfn' has finished. Time (0:00:21.344518)✓
+.Launched workflow '29-adaboostclassifier-fit-0276ac93-cvmmwk'
+....................
+Workflow '29-adaboostclassifier-fit-0276ac93-cvmmwk' has finished. Time (0:00:20.971929)✓
+.Launched workflow '30-adaboostclassifier-fit-6396c6ac-bgv92s'
+....................
+Workflow '30-adaboostclassifier-fit-6396c6ac-bgv92s' has finished. Time (0:00:21.604669)✓
+.Launched workflow '31-adaboostclassifier-fit-d36b766e-24kmx5'
+....................
+Workflow '31-adaboostclassifier-fit-d36b766e-24kmx5' has finished. Time (0:00:21.229031)✓
+.Launched workflow '32-adaboostclassifier-fit-78c1ae96-dj8zss'
+....................
+Workflow '32-adaboostclassifier-fit-78c1ae96-dj8zss' has finished. Time (0:00:20.862949)✓
+.Launched workflow '33-adaboostclassifier-fit-8a240b0f-2pg4zr'
+....................
+Workflow '33-adaboostclassifier-fit-8a240b0f-2pg4zr' has finished. Time (0:00:21.488169)✓
+.Launched workflow '34-adaboostclassifier-fit-cd572f0a-5mxz4m'
+....................
+Workflow '34-adaboostclassifier-fit-cd572f0a-5mxz4m' has finished. Time (0:00:21.117209)✓
+.Launched workflow '35-adaboostclassifier-fit-1f572a82-cbtzmr'
+....................
+Workflow '35-adaboostclassifier-fit-1f572a82-cbtzmr' has finished. Time (0:00:20.736708)✓
+.Launched workflow '36-adaboostclassifier-fit-88abb713-4lgzpk'
+....................
+Workflow '36-adaboostclassifier-fit-88abb713-4lgzpk' has finished. Time (0:00:21.356036)✓
+.Launched workflow '37-adaboostclassifier-fit-b91f1a63-96wwwd'
+....................
+Workflow '37-adaboostclassifier-fit-b91f1a63-96wwwd' has finished. Time (0:00:20.969258)✓
+.Launched workflow '38-adaboostclassifier-fit-47cfd684-eddq7b'
+....................
+Workflow '38-adaboostclassifier-fit-47cfd684-eddq7b' has finished. Time (0:00:21.599300)✓
+.Launched workflow '39-adaboostclassifier-fit-b40ff1f1-fcqlwv'
+....................
+Workflow '39-adaboostclassifier-fit-b40ff1f1-fcqlwv' has finished. Time (0:00:21.213520)✓
+.Artifacts deleted from .kubetmp/b3183d7a/tmp
+[866.0256741046906]
+
+
+
+Launched kubernetes test 2 concurrents
+Launched workflow '0-adaboostclassifier-fit-86296d52-4jrh5t'
+Launched workflow '1-adaboostclassifier-fit-a234ac3a-9v7vh6'
+....................
+Workflow '0-adaboostclassifier-fit-86296d52-4jrh5t' has finished. Time (0:00:20.834597)✓
+.
+Workflow '1-adaboostclassifier-fit-a234ac3a-9v7vh6' has finished. Time (0:00:21.867821)✓
+.Launched workflow '2-adaboostclassifier-fit-bcc99617-8mqdjn'
+Launched workflow '3-adaboostclassifier-fit-b68b8e54-ex8f5g'
+....................
+Workflow '2-adaboostclassifier-fit-bcc99617-8mqdjn' has finished. Time (0:00:21.555502)✓
+.
+Workflow '3-adaboostclassifier-fit-b68b8e54-ex8f5g' has finished. Time (0:00:22.590634)✓
+.Launched workflow '4-adaboostclassifier-fit-e35b2648-d7z95g'
+Launched workflow '5-adaboostclassifier-fit-ab34d9e9-2cv2q2'
+....................
+Workflow '4-adaboostclassifier-fit-e35b2648-d7z95g' has finished. Time (0:00:21.270583)✓
+.
+Workflow '5-adaboostclassifier-fit-ab34d9e9-2cv2q2' has finished. Time (0:00:22.305175)✓
+.Launched workflow '6-adaboostclassifier-fit-ce1a0df3-5dqcdd'
+Launched workflow '7-adaboostclassifier-fit-aaf15c61-bfmv59'
+....................
+Workflow '6-adaboostclassifier-fit-ce1a0df3-5dqcdd' has finished. Time (0:00:20.991646)✓
+.
+Workflow '7-adaboostclassifier-fit-aaf15c61-bfmv59' has finished. Time (0:00:22.028652)✓
+.Launched workflow '8-adaboostclassifier-fit-e436dea2-en9c8m'
+Launched workflow '9-adaboostclassifier-fit-d2d93ead-8jlhdr'
+....................
+Workflow '8-adaboostclassifier-fit-e436dea2-en9c8m' has finished. Time (0:00:20.705953)✓
+.
+Workflow '9-adaboostclassifier-fit-d2d93ead-8jlhdr' has finished. Time (0:00:21.740709)✓
+.Launched workflow '10-adaboostclassifier-fit-99f9c3eb-awp6x7'
+Launched workflow '11-adaboostclassifier-fit-8eac8183-ecf8dh'
+....................
+Workflow '10-adaboostclassifier-fit-99f9c3eb-awp6x7' has finished. Time (0:00:21.441598)✓
+.
+Workflow '11-adaboostclassifier-fit-8eac8183-ecf8dh' has finished. Time (0:00:22.474789)✓
+.Launched workflow '12-adaboostclassifier-fit-c4a8d0a3-9skbhk'
+Launched workflow '13-adaboostclassifier-fit-46b7b8f3-8cb7nb'
+....................
+Workflow '12-adaboostclassifier-fit-c4a8d0a3-9skbhk' has finished. Time (0:00:21.172629)✓
+.
+Workflow '13-adaboostclassifier-fit-46b7b8f3-8cb7nb' has finished. Time (0:00:22.205941)✓
+.Launched workflow '14-adaboostclassifier-fit-22490769-65g28m'
+Launched workflow '15-adaboostclassifier-fit-cec44166-47l5bd'
+....................
+Workflow '14-adaboostclassifier-fit-22490769-65g28m' has finished. Time (0:00:20.884794)✓
+.
+Workflow '15-adaboostclassifier-fit-cec44166-47l5bd' has finished. Time (0:00:21.919894)✓
+.Launched workflow '16-adaboostclassifier-fit-733c65b2-7564k5'
+Launched workflow '17-adaboostclassifier-fit-0277cc5c-cv8drl'
+....................
+Workflow '16-adaboostclassifier-fit-733c65b2-7564k5' has finished. Time (0:00:21.603836)✓
+.
+Workflow '17-adaboostclassifier-fit-0277cc5c-cv8drl' has finished. Time (0:00:22.639797)✓
+.Launched workflow '18-adaboostclassifier-fit-fcd593fc-bvf64w'
+Launched workflow '19-adaboostclassifier-fit-c833c0cc-dr85ld'
+....................
+Workflow '18-adaboostclassifier-fit-fcd593fc-bvf64w' has finished. Time (0:00:21.308037)✓
+.
+Workflow '19-adaboostclassifier-fit-c833c0cc-dr85ld' has finished. Time (0:00:22.341306)✓
+.Launched workflow '20-adaboostclassifier-fit-478659c3-67vp27'
+Launched workflow '21-adaboostclassifier-fit-87d73396-d7qjl2'
+....................
+Workflow '20-adaboostclassifier-fit-478659c3-67vp27' has finished. Time (0:00:21.031261)✓
+.
+Workflow '21-adaboostclassifier-fit-87d73396-d7qjl2' has finished. Time (0:00:22.064151)✓
+.Launched workflow '22-adaboostclassifier-fit-250fc0e0-1r8wm9'
+Launched workflow '23-adaboostclassifier-fit-1fd8d282-4kzn6g'
+....................
+Workflow '22-adaboostclassifier-fit-250fc0e0-1r8wm9' has finished. Time (0:00:20.745776)✓
+.
+Workflow '23-adaboostclassifier-fit-1fd8d282-4kzn6g' has finished. Time (0:00:21.782714)✓
+.Launched workflow '24-adaboostclassifier-fit-950a157b-4t8j7m'
+Launched workflow '25-adaboostclassifier-fit-1f667ba6-18cmbh'
+....................
+Workflow '24-adaboostclassifier-fit-950a157b-4t8j7m' has finished. Time (0:00:21.488448)✓
+.
+Workflow '25-adaboostclassifier-fit-1f667ba6-18cmbh' has finished. Time (0:00:22.523954)✓
+.Launched workflow '26-adaboostclassifier-fit-369d12fd-92xxct'
+Launched workflow '27-adaboostclassifier-fit-dc374f58-dwjdnt'
+....................
+Workflow '26-adaboostclassifier-fit-369d12fd-92xxct' has finished. Time (0:00:21.225663)✓
+.
+Workflow '27-adaboostclassifier-fit-dc374f58-dwjdnt' has finished. Time (0:00:22.263947)✓
+.Launched workflow '28-adaboostclassifier-fit-3e6a1e62-a5rcx4'
+Launched workflow '29-adaboostclassifier-fit-0276ac93-chvzn5'
+....................
+Workflow '28-adaboostclassifier-fit-3e6a1e62-a5rcx4' has finished. Time (0:00:20.980697)✓
+.
+Workflow '29-adaboostclassifier-fit-0276ac93-chvzn5' has finished. Time (0:00:22.015175)✓
+.Launched workflow '30-adaboostclassifier-fit-6396c6ac-b96gt2'
+Launched workflow '31-adaboostclassifier-fit-d36b766e-2ck55j'
+....................
+Workflow '30-adaboostclassifier-fit-6396c6ac-b96gt2' has finished. Time (0:00:20.700443)✓
+.
+Workflow '31-adaboostclassifier-fit-d36b766e-2ck55j' has finished. Time (0:00:21.736875)✓
+.Launched workflow '32-adaboostclassifier-fit-78c1ae96-dbcrqn'
+Launched workflow '33-adaboostclassifier-fit-8a240b0f-2g7zv7'
+....................
+Workflow '32-adaboostclassifier-fit-78c1ae96-dbcrqn' has finished. Time (0:00:21.438043)✓
+.
+Workflow '33-adaboostclassifier-fit-8a240b0f-2g7zv7' has finished. Time (0:00:22.472261)✓
+.Launched workflow '34-adaboostclassifier-fit-cd572f0a-5fs6q6'
+Launched workflow '35-adaboostclassifier-fit-1f572a82-cp6ppz'
+....................
+Workflow '34-adaboostclassifier-fit-cd572f0a-5fs6q6' has finished. Time (0:00:21.162098)✓
+.
+Workflow '35-adaboostclassifier-fit-1f572a82-cp6ppz' has finished. Time (0:00:22.196194)✓
+.Launched workflow '36-adaboostclassifier-fit-88abb713-4mgpgs'
+Launched workflow '37-adaboostclassifier-fit-b91f1a63-9fr55k'
+....................
+Workflow '36-adaboostclassifier-fit-88abb713-4mgpgs' has finished. Time (0:00:20.901558)✓
+.
+Workflow '37-adaboostclassifier-fit-b91f1a63-9fr55k' has finished. Time (0:00:21.942244)✓
+.Launched workflow '38-adaboostclassifier-fit-47cfd684-efbhkd'
+Launched workflow '39-adaboostclassifier-fit-b40ff1f1-fjpfzl'
+....................
+Workflow '38-adaboostclassifier-fit-47cfd684-efbhkd' has finished. Time (0:00:21.635147)✓
+.
+Workflow '39-adaboostclassifier-fit-b40ff1f1-fjpfzl' has finished. Time (0:00:21.669986)✓
+.Artifacts deleted from .kubetmp/b3183d7a/tmp
+[455.40442538261414]
+
+
+
+Launched kubernetes test 4 concurrents
+Launched workflow '0-adaboostclassifier-fit-86296d52-4tkszc'
+Launched workflow '1-adaboostclassifier-fit-a234ac3a-97r7qt'
+Launched workflow '2-adaboostclassifier-fit-bcc99617-8cznnr'
+Launched workflow '3-adaboostclassifier-fit-b68b8e54-etf4vx'
+....................
+Workflow '0-adaboostclassifier-fit-86296d52-4tkszc' has finished. Time (0:00:21.337945)✓
+.
+Workflow '1-adaboostclassifier-fit-a234ac3a-97r7qt' has finished. Time (0:00:22.372731)✓
+.
+Workflow '2-adaboostclassifier-fit-bcc99617-8cznnr' has finished. Time (0:00:23.406412)✓
+.
+Workflow '3-adaboostclassifier-fit-b68b8e54-etf4vx' has finished. Time (0:00:24.441651)✓
+.Launched workflow '4-adaboostclassifier-fit-e35b2648-drslsm'
+Launched workflow '5-adaboostclassifier-fit-ab34d9e9-2mwj6b'
+Launched workflow '6-adaboostclassifier-fit-ce1a0df3-529575'
+Launched workflow '7-adaboostclassifier-fit-aaf15c61-bzh978'
+....................
+Workflow '4-adaboostclassifier-fit-e35b2648-drslsm' has finished. Time (0:00:21.244662)✓
+.
+Workflow '5-adaboostclassifier-fit-ab34d9e9-2mwj6b' has finished. Time (0:00:22.278023)✓
+.
+Workflow '6-adaboostclassifier-fit-ce1a0df3-529575' has finished. Time (0:00:23.311009)✓
+.
+Workflow '7-adaboostclassifier-fit-aaf15c61-bzh978' has finished. Time (0:00:24.345731)✓
+.Launched workflow '8-adaboostclassifier-fit-e436dea2-elskr6'
+Launched workflow '9-adaboostclassifier-fit-d2d93ead-82ctj6'
+Launched workflow '10-adaboostclassifier-fit-99f9c3eb-a689t6'
+Launched workflow '11-adaboostclassifier-fit-8eac8183-efhvw4'
+....................
+Workflow '8-adaboostclassifier-fit-e436dea2-elskr6' has finished. Time (0:00:21.166074)✓
+.
+Workflow '9-adaboostclassifier-fit-d2d93ead-82ctj6' has finished. Time (0:00:22.204756)✓
+.
+Workflow '10-adaboostclassifier-fit-99f9c3eb-a689t6' has finished. Time (0:00:23.240295)✓
+.
+Workflow '11-adaboostclassifier-fit-8eac8183-efhvw4' has finished. Time (0:00:24.276069)✓
+.Launched workflow '12-adaboostclassifier-fit-c4a8d0a3-98m644'
+Launched workflow '13-adaboostclassifier-fit-46b7b8f3-8w6qnt'
+Launched workflow '14-adaboostclassifier-fit-22490769-6sbkqd'
+Launched workflow '15-adaboostclassifier-fit-cec44166-4vpt8h'
+....................
+Workflow '12-adaboostclassifier-fit-c4a8d0a3-98m644' has finished. Time (0:00:21.081642)✓
+.
+Workflow '13-adaboostclassifier-fit-46b7b8f3-8w6qnt' has finished. Time (0:00:22.117470)✓
+.
+Workflow '14-adaboostclassifier-fit-22490769-6sbkqd' has finished. Time (0:00:23.153064)✓
+.
+Workflow '15-adaboostclassifier-fit-cec44166-4vpt8h' has finished. Time (0:00:24.189963)✓
+.Launched workflow '16-adaboostclassifier-fit-733c65b2-7xlg4k'
+Launched workflow '17-adaboostclassifier-fit-0277cc5c-czq8j6'
+Launched workflow '18-adaboostclassifier-fit-fcd593fc-bnp724'
+Launched workflow '19-adaboostclassifier-fit-c833c0cc-dwmgmd'
+....................
+Workflow '16-adaboostclassifier-fit-733c65b2-7xlg4k' has finished. Time (0:00:21.048981)✓
+.
+Workflow '17-adaboostclassifier-fit-0277cc5c-czq8j6' has finished. Time (0:00:22.086676)✓
+.
+Workflow '18-adaboostclassifier-fit-fcd593fc-bnp724' has finished. Time (0:00:23.122068)✓
+.
+Workflow '19-adaboostclassifier-fit-c833c0cc-dwmgmd' has finished. Time (0:00:24.157486)✓
+.Launched workflow '20-adaboostclassifier-fit-478659c3-6cnz54'
+Launched workflow '21-adaboostclassifier-fit-87d73396-dkwqch'
+Launched workflow '22-adaboostclassifier-fit-250fc0e0-126t44'
+Launched workflow '23-adaboostclassifier-fit-1fd8d282-4n2kbp'
+....................
+Workflow '20-adaboostclassifier-fit-478659c3-6cnz54' has finished. Time (0:00:20.978760)✓
+.
+Workflow '21-adaboostclassifier-fit-87d73396-dkwqch' has finished. Time (0:00:22.016037)✓
+.
+Workflow '22-adaboostclassifier-fit-250fc0e0-126t44' has finished. Time (0:00:23.052758)✓
+.
+Workflow '23-adaboostclassifier-fit-1fd8d282-4n2kbp' has finished. Time (0:00:24.085687)✓
+.Launched workflow '24-adaboostclassifier-fit-950a157b-4smx46'
+Launched workflow '25-adaboostclassifier-fit-1f667ba6-16gw9v'
+Launched workflow '26-adaboostclassifier-fit-369d12fd-9hg8dc'
+Launched workflow '27-adaboostclassifier-fit-dc374f58-dszfvs'
+....................
+Workflow '24-adaboostclassifier-fit-950a157b-4smx46' has finished. Time (0:00:20.928026)✓
+.
+Workflow '25-adaboostclassifier-fit-1f667ba6-16gw9v' has finished. Time (0:00:21.965569)✓
+.
+Workflow '26-adaboostclassifier-fit-369d12fd-9hg8dc' has finished. Time (0:00:23.001066)✓
+.
+Workflow '27-adaboostclassifier-fit-dc374f58-dszfvs' has finished. Time (0:00:24.038356)✓
+.Launched workflow '28-adaboostclassifier-fit-3e6a1e62-agnd4r'
+Launched workflow '29-adaboostclassifier-fit-0276ac93-chffl9'
+Launched workflow '30-adaboostclassifier-fit-6396c6ac-b9kt6x'
+Launched workflow '31-adaboostclassifier-fit-d36b766e-2gs99n'
+....................
+Workflow '28-adaboostclassifier-fit-3e6a1e62-agnd4r' has finished. Time (0:00:20.861740)✓
+.
+Workflow '29-adaboostclassifier-fit-0276ac93-chffl9' has finished. Time (0:00:21.896683)✓
+.
+Workflow '30-adaboostclassifier-fit-6396c6ac-b9kt6x' has finished. Time (0:00:22.932542)✓
+.
+Workflow '31-adaboostclassifier-fit-d36b766e-2gs99n' has finished. Time (0:00:23.966820)✓
+.Launched workflow '32-adaboostclassifier-fit-78c1ae96-dcql9l'
+Launched workflow '33-adaboostclassifier-fit-8a240b0f-2zvmg2'
+Launched workflow '34-adaboostclassifier-fit-cd572f0a-5t88wr'
+Launched workflow '35-adaboostclassifier-fit-1f572a82-czj5t4'
+....................
+Workflow '32-adaboostclassifier-fit-78c1ae96-dcql9l' has finished. Time (0:00:21.800177)✓
+.
+Workflow '33-adaboostclassifier-fit-8a240b0f-2zvmg2' has finished. Time (0:00:21.834927)✓
+.
+Workflow '34-adaboostclassifier-fit-cd572f0a-5t88wr' has finished. Time (0:00:22.871254)✓
+.
+Workflow '35-adaboostclassifier-fit-1f572a82-czj5t4' has finished. Time (0:00:23.905239)✓
+.Launched workflow '36-adaboostclassifier-fit-88abb713-4sdhh9'
+Launched workflow '37-adaboostclassifier-fit-b91f1a63-97mk8k'
+Launched workflow '38-adaboostclassifier-fit-47cfd684-ecf5rc'
+Launched workflow '39-adaboostclassifier-fit-b40ff1f1-fxdnpg'
+....................
+Workflow '36-adaboostclassifier-fit-88abb713-4sdhh9' has finished. Time (0:00:21.732793)✓
+.
+Workflow '37-adaboostclassifier-fit-b91f1a63-97mk8k' has finished. Time (0:00:22.769016)✓
+.
+Workflow '38-adaboostclassifier-fit-47cfd684-ecf5rc' has finished. Time (0:00:22.803385)✓
+.
+Workflow '39-adaboostclassifier-fit-b40ff1f1-fxdnpg' has finished. Time (0:00:23.840183)✓
+.Artifacts deleted from .kubetmp/b3183d7a/tmp
+[250.19676876068115]
+
+
+
+Launched kubernetes test 8 concurrents
+Launched workflow '0-adaboostclassifier-fit-86296d52-4dt65b'
+Launched workflow '1-adaboostclassifier-fit-a234ac3a-9s99qq'
+Launched workflow '2-adaboostclassifier-fit-bcc99617-829q9f'
+Launched workflow '3-adaboostclassifier-fit-b68b8e54-egrmjz'
+Launched workflow '4-adaboostclassifier-fit-e35b2648-d69pss'
+Launched workflow '5-adaboostclassifier-fit-ab34d9e9-2dvw7q'
+Launched workflow '6-adaboostclassifier-fit-ce1a0df3-5t5trw'
+Launched workflow '7-adaboostclassifier-fit-aaf15c61-b4crfg'
+....................
+Workflow '4-adaboostclassifier-fit-e35b2648-d69pss' has finished. Time (0:00:21.679334)✓
+...
+Workflow '7-adaboostclassifier-fit-aaf15c61-b4crfg' has finished. Time (0:00:23.774696)✓
+.Launched workflow '8-adaboostclassifier-fit-e436dea2-eh9tfm'
+Launched workflow '9-adaboostclassifier-fit-d2d93ead-84bfjc'
+..
+Workflow '2-adaboostclassifier-fit-bcc99617-829q9f' has finished. Time (0:00:27.951311)✓
+......Launched workflow '10-adaboostclassifier-fit-99f9c3eb-a49ln5'
+
+Workflow '0-adaboostclassifier-fit-86296d52-4dt65b' has finished. Time (0:00:34.186812)✓
+.
+Workflow '1-adaboostclassifier-fit-a234ac3a-9s99qq' has finished. Time (0:00:35.222021)✓
+.
+Workflow '3-adaboostclassifier-fit-b68b8e54-egrmjz' has finished. Time (0:00:36.258091)✓
+.
+Workflow '5-adaboostclassifier-fit-ab34d9e9-2dvw7q' has finished. Time (0:00:37.292433)✓
+.
+Workflow '6-adaboostclassifier-fit-ce1a0df3-5t5trw' has finished. Time (0:00:37.330286)✓
+....Launched workflow '11-adaboostclassifier-fit-8eac8183-etjpwz'
+Launched workflow '12-adaboostclassifier-fit-c4a8d0a3-9dnn5n'
+Launched workflow '13-adaboostclassifier-fit-46b7b8f3-85wzzq'
+Launched workflow '14-adaboostclassifier-fit-22490769-6mbvr8'
+Launched workflow '15-adaboostclassifier-fit-cec44166-4bkbvb'
+........
+Workflow '8-adaboostclassifier-fit-e436dea2-eh9tfm' has finished. Time (0:00:25.911830)✓
+.
+Workflow '9-adaboostclassifier-fit-d2d93ead-84bfjc' has finished. Time (0:00:26.947711)✓
+.......Launched workflow '16-adaboostclassifier-fit-733c65b2-7mqhrj'
+Launched workflow '17-adaboostclassifier-fit-0277cc5c-cdvnwn'
+
+Workflow '10-adaboostclassifier-fit-99f9c3eb-a49ln5' has finished. Time (0:00:25.263818)✓
+....
+Workflow '14-adaboostclassifier-fit-22490769-6mbvr8' has finished. Time (0:00:21.384658)✓
+....Launched workflow '18-adaboostclassifier-fit-fcd593fc-bwzwjh'
+Launched workflow '19-adaboostclassifier-fit-c833c0cc-dffksp'
+.
+Workflow '12-adaboostclassifier-fit-c4a8d0a3-9dnn5n' has finished. Time (0:00:26.618671)✓
+.......Launched workflow '20-adaboostclassifier-fit-478659c3-6gg78f'
+
+Workflow '11-adaboostclassifier-fit-8eac8183-etjpwz' has finished. Time (0:00:33.865728)✓
+.
+Workflow '13-adaboostclassifier-fit-46b7b8f3-85wzzq' has finished. Time (0:00:34.901530)✓
+.
+Workflow '15-adaboostclassifier-fit-cec44166-4bkbvb' has finished. Time (0:00:35.939203)✓
+..
+Workflow '17-adaboostclassifier-fit-0277cc5c-cdvnwn' has finished. Time (0:00:21.006603)✓
+....Launched workflow '21-adaboostclassifier-fit-87d73396-df684v'
+Launched workflow '22-adaboostclassifier-fit-250fc0e0-1cvtph'
+Launched workflow '23-adaboostclassifier-fit-1fd8d282-4qwjdb'
+Launched workflow '24-adaboostclassifier-fit-950a157b-4rv9rw'
+
+Workflow '16-adaboostclassifier-fit-733c65b2-7mqhrj' has finished. Time (0:00:25.326022)✓
+........Launched workflow '25-adaboostclassifier-fit-1f667ba6-1jl2tz'
+
+Workflow '18-adaboostclassifier-fit-fcd593fc-bwzwjh' has finished. Time (0:00:25.616086)✓
+.
+Workflow '19-adaboostclassifier-fit-c833c0cc-dffksp' has finished. Time (0:00:26.650816)✓
+.......Launched workflow '26-adaboostclassifier-fit-369d12fd-9mbszk'
+Launched workflow '27-adaboostclassifier-fit-dc374f58-dhdtwh'
+
+Workflow '20-adaboostclassifier-fit-478659c3-6gg78f' has finished. Time (0:00:25.966008)✓
+....
+Workflow '24-adaboostclassifier-fit-950a157b-4rv9rw' has finished. Time (0:00:21.097928)✓
+....Launched workflow '28-adaboostclassifier-fit-3e6a1e62-amlrqd'
+Launched workflow '29-adaboostclassifier-fit-0276ac93-czpqp2'
+
+Workflow '21-adaboostclassifier-fit-87d73396-df684v' has finished. Time (0:00:25.301099)✓
+.
+Workflow '22-adaboostclassifier-fit-250fc0e0-1cvtph' has finished. Time (0:00:26.339805)✓
+.
+Workflow '23-adaboostclassifier-fit-1fd8d282-4qwjdb' has finished. Time (0:00:27.374266)✓
+......Launched workflow '30-adaboostclassifier-fit-6396c6ac-bvjpl9'
+Launched workflow '31-adaboostclassifier-fit-d36b766e-2n98jn'
+Launched workflow '32-adaboostclassifier-fit-78c1ae96-dlpdtt'
+
+Workflow '25-adaboostclassifier-fit-1f667ba6-1jl2tz' has finished. Time (0:00:25.702705)✓
+........Launched workflow '33-adaboostclassifier-fit-8a240b0f-2756x2'
+
+Workflow '26-adaboostclassifier-fit-369d12fd-9mbszk' has finished. Time (0:00:26.001857)✓
+.
+Workflow '27-adaboostclassifier-fit-dc374f58-dhdtwh' has finished. Time (0:00:27.035467)✓
+.......Launched workflow '34-adaboostclassifier-fit-cd572f0a-5xsmt4'
+Launched workflow '35-adaboostclassifier-fit-1f572a82-c56vvz'
+
+Workflow '28-adaboostclassifier-fit-3e6a1e62-amlrqd' has finished. Time (0:00:25.358381)✓
+.
+Workflow '29-adaboostclassifier-fit-0276ac93-czpqp2' has finished. Time (0:00:26.397938)✓
+...
+Workflow '32-adaboostclassifier-fit-78c1ae96-dlpdtt' has finished. Time (0:00:21.498103)✓
+....Launched workflow '36-adaboostclassifier-fit-88abb713-4qlrj8'
+Launched workflow '37-adaboostclassifier-fit-b91f1a63-9j8thm'
+Launched workflow '38-adaboostclassifier-fit-47cfd684-en6jnd'
+
+Workflow '30-adaboostclassifier-fit-6396c6ac-bvjpl9' has finished. Time (0:00:25.773573)✓
+.
+Workflow '31-adaboostclassifier-fit-d36b766e-2n98jn' has finished. Time (0:00:26.812849)✓
+.......Launched workflow '39-adaboostclassifier-fit-b40ff1f1-f5jvdh'
+
+Workflow '33-adaboostclassifier-fit-8a240b0f-2756x2' has finished. Time (0:00:26.076215)✓
+.......
+Workflow '34-adaboostclassifier-fit-cd572f0a-5xsmt4' has finished. Time (0:00:24.309601)✓
+.
+Workflow '35-adaboostclassifier-fit-1f572a82-c56vvz' has finished. Time (0:00:25.345242)✓
+.....
+Workflow '36-adaboostclassifier-fit-88abb713-4qlrj8' has finished. Time (0:00:22.515634)✓
+.
+Workflow '37-adaboostclassifier-fit-b91f1a63-9j8thm' has finished. Time (0:00:23.551719)✓
+.
+Workflow '38-adaboostclassifier-fit-47cfd684-en6jnd' has finished. Time (0:00:24.591350)✓
+.....
+Workflow '39-adaboostclassifier-fit-b40ff1f1-f5jvdh' has finished. Time (0:00:20.763696)✓
+.Artifacts deleted from .kubetmp/b3183d7a/tmp
+[172.9562578201294]
+
+
+
+Launched kubernetes test 16 concurrents
+Launched workflow '0-adaboostclassifier-fit-86296d52-4vlkgp'
+Launched workflow '1-adaboostclassifier-fit-a234ac3a-95t2m2'
+Launched workflow '2-adaboostclassifier-fit-bcc99617-8lgc2d'
+Launched workflow '3-adaboostclassifier-fit-b68b8e54-esz7q5'
+Launched workflow '4-adaboostclassifier-fit-e35b2648-dlmwl4'
+Launched workflow '5-adaboostclassifier-fit-ab34d9e9-22hzb9'
+Launched workflow '6-adaboostclassifier-fit-ce1a0df3-5hxbjg'
+Launched workflow '7-adaboostclassifier-fit-aaf15c61-bvkkl7'
+Launched workflow '8-adaboostclassifier-fit-e436dea2-eprdd6'
+Launched workflow '9-adaboostclassifier-fit-d2d93ead-8rg7ft'
+Launched workflow '10-adaboostclassifier-fit-99f9c3eb-at56g2'
+Launched workflow '11-adaboostclassifier-fit-8eac8183-e47ncn'
+Launched workflow '12-adaboostclassifier-fit-c4a8d0a3-9w2klp'
+Launched workflow '13-adaboostclassifier-fit-46b7b8f3-8vd9ct'
+Launched workflow '14-adaboostclassifier-fit-22490769-6nb78k'
+Launched workflow '15-adaboostclassifier-fit-cec44166-4nztkr'
+................................
+Workflow '0-adaboostclassifier-fit-86296d52-4vlkgp' has finished. Time (0:00:34.247368)✓
+.
+Workflow '1-adaboostclassifier-fit-a234ac3a-95t2m2' has finished. Time (0:00:35.283894)✓
+.......
+Workflow '8-adaboostclassifier-fit-e436dea2-eprdd6' has finished. Time (0:00:41.523128)✓
+.
+Workflow '9-adaboostclassifier-fit-d2d93ead-8rg7ft' has finished. Time (0:00:42.558079)✓
+.......Launched workflow '16-adaboostclassifier-fit-733c65b2-7pqbl2'
+Launched workflow '17-adaboostclassifier-fit-0277cc5c-cf2zsj'
+Launched workflow '18-adaboostclassifier-fit-fcd593fc-bx67dk'
+Launched workflow '19-adaboostclassifier-fit-c833c0cc-dfkbxp'
+
+Workflow '2-adaboostclassifier-fit-bcc99617-8lgc2d' has finished. Time (0:00:50.972490)✓
+.
+Workflow '3-adaboostclassifier-fit-b68b8e54-esz7q5' has finished. Time (0:00:52.005526)✓
+.Artifacts deleted from .kubetmp/b3183d7a/
