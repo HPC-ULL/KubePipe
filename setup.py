@@ -11,8 +11,8 @@ setup(
   download_url = 'https://github.com/alu0101040882/kubernetes-ml-pipeline-TFM',    # I explain this later on
   keywords = ['Kubernetes','Machine learning'],   # Keywords that define your package best
   install_requires=[            # I get to this in a second
-        'git+https://github.com/argoproj/argo-workflows@master#subdirectory=sdks/python/client',
-        'git+https://github.com/kubernetes-client/python',
+        'argo-workflows==6.3.0rc2',
+        'kubernetes',
         'minio',
         'PyYAML',
         'scikit_learn==1.0.2'
