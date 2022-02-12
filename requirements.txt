@@ -1,6 +1,0 @@
-git+https://github.com/argoproj/argo-workflows@master#subdirectory=sdks/python/client
-git+https://github.com/kubernetes-client/python
-minio==7.1.2
-pandas==1.1.5
-PyYAML==6.0
-scikit_learn==1.0.2

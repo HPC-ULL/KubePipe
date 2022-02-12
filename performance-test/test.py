@@ -25,21 +25,13 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
-import subprocess
-import csv
-
 import gc
+
+import csv
 
 workdir = f"{os.path.dirname(os.path.realpath(__file__))}/test-results"
 
-
-BASE_PROCS = 2
-
-all_node_names = ["k3s-nodo-5-1cpu","k3s-nodo-6-1cpu","k3s-nodo-7-1cpu","k3s-nodo-9-1cpu","k3s-nodo-10-1cpu","k3s-nodo-11-1cpu","k3s-nodo-12-1cpu"]
-
-
-test_samples = [600000,700000,800000,900000,1000000,2000000,3000000,4000000,5000000,6000000,7000000,8000000,9000000,10000000,20000000,30000000,40000000,50000000]
-#test_samples = [10,10]
+test_samples = [100,1000,2000,3000,4000,5000,10000,20000,30000,40000,50000,100000,200000,300000,400000,500000,1000000]
 
 NUMBER_OF_FEATURES = 5
 
@@ -57,8 +49,6 @@ clasifiers = [
             ]
 
 
-node_names = all_node_names[:len(clasifiers)]
-
 kubepipelines = make_kube_pipeline(*clasifiers)
 
 
@@ -70,12 +60,6 @@ clasifierNames = []
 for clasifier in clasifiers:
     scikitPipelines.append(make_pipeline(*clasifier))
     clasifierNames.append(str(type(clasifier[-1]).__name__))
-
-
-#Cordon all nodes
-def cordonNodes(node_names):
-    for node in node_names:
-        subprocess.run(f"kubectl cordon {node}", shell=True, check=True)
 
 
 def mean(arr):
@@ -94,7 +78,6 @@ def test(pipelines,testTimes,X_train,y_train):
 
         if(isinstance(pipelines,Kube_pipe)):
             pipelines.fit(X_train,y_train)
-            pipelines.deleteTemporaryFiles()
         else:
             for pipeline in pipelines:
                 pipeline.fit(X_train, y_train)
@@ -115,23 +98,14 @@ os.mkdir(f"{workdir}/{now}/csv")
 os.mkdir(f"{workdir}/{now}/plots")
 
 
-kubenames = ["Samples","Scikit"]
-speednames = ["Samples"]
-for i, name in enumerate(node_names):
-    kubenames.append(f"Kubernetes-{i+BASE_PROCS}proc")
-    speednames.append(f"SpeedUp-{i+BASE_PROCS}proc")
-
-
 with open(f"{workdir}/{now}/csv/times.csv", "a") as file:
     writer = csv.writer(file)
-    writer.writerow(kubenames)
+    writer.writerow(["Samples","Scikit","Kubernetes"])
 
 with open(f"{workdir}/{now}/csv/speedup.csv", "a") as file:
     writer = csv.writer(file)
-    writer.writerow(speednames)
+    writer.writerow(["Samples","Speed Up"])
 
-del kubenames
-del speednames
 
 scikitTimes = []
 kubeTimes = []
@@ -143,50 +117,34 @@ try:
 
         for i , n_sample in enumerate(test_samples):
             X, y = datasets.make_classification(n_samples=n_sample,n_features=NUMBER_OF_FEATURES)
-
             f.write(f"{n_sample} samples:\n")
 
-            cordonNodes(node_names)
-
             scikitTimes.append(mean(test(scikitPipelines,NUMBER_OF_TEST,X,y)))
-            f.write(f"Scikit Pipeline:    \t {scikitTimes[i]} seconds\n")
+            f.write(f"Scikit Pipeline:    \t {str(datetime.timedelta(seconds=scikitTimes[i]))}  ({scikitTimes[i]} seconds)\n")
 
-            kubeTimes.append([])
-            speedUps.append([])
+            kubeTimes.append(mean(test(kubepipelines,NUMBER_OF_TEST,X,y)))
+            f.write(f"Kubernetes Pipeline:\t {str(datetime.timedelta(seconds=kubeTimes[i]))}  ({kubeTimes[i]} seconds)\n")
 
-            for proc, name in enumerate(node_names):
+            speedUps.append(scikitTimes[i]/kubeTimes[i])
+            f.write(f"Speedup:            \t {speedUps[i]}\n\n")
 
-                os.system(f"kubectl uncordon {name}")
+            print(f"samples:{n_sample}\nscikit: {scikitTimes[i]}\nkubernetes: {kubeTimes[i]}\nspeedup:{speedUps[i]}\n\n")
 
-                kubeTimes[i].append(mean(test(kubepipelines,NUMBER_OF_TEST,X,y)))
-                
-                speedUps[i].append(scikitTimes[i]/kubeTimes[i][proc])
-                
-
-            f.write(f"Kubernetes Pipeline:\t {kubeTimes[i]} seconds\n")
-
-            f.write(f"Speedup:            \t {speedUps[i]}\n")
-                
             with open(f"{workdir}/{now}/csv/times.csv", "a") as file:
                 writer = csv.writer(file)
-                writer.writerow([n_sample,scikitTimes[i]]+kubeTimes[i])
+                writer.writerow([n_sample,scikitTimes[i],kubeTimes[i]])
 
             with open(f"{workdir}/{now}/csv/speedup.csv", "a") as file:
                 writer = csv.writer(file)
-                writer.writerow([n_sample]+speedUps[i])
+                writer.writerow([n_sample,speedUps[i]])
         
             del X
             del y
-            del kubepipelines
 
             gc.collect()
 
-            kubepipelines = make_kube_pipeline(*clasifiers)
-
             f.flush()
             os.fsync(f)
-
-            print(f"samples:{n_sample}\nscikit: {scikitTimes[i]}\nkubernetes: {kubeTimes[i]}\nspeedup:{speedUps[i]}\n\n")
 
 finally:
 
@@ -195,32 +153,12 @@ finally:
 
     y_labels = []
 
-
-    kube_proc_times = []
-
-    speedups_proc = [] 
-
-    for i in range(len(node_names)):
-        kube_proc_times.append([])
-        speedups_proc.append([])
-
-    for i in range(len(kubeTimes)):
-
-        for j in range(len(kubeTimes[i])):
-            kube_proc_times[j].append(kubeTimes[i][j])
-            speedups_proc[j].append(speedUps[i][j])
-
-
     for sample in test_samples:
         y_labels.append(str(sample))
 
-
     plt.figure()
     plt.plot(y_labels[0:len(scikitTimes)], scikitTimes, label = "Scikit")
-
-    for i, times in enumerate(kube_proc_times):
-        plt.plot(y_labels[0:len(times)], times, label = f"Kubernetes-{i+BASE_PROCS}procs")
-
+    plt.plot(y_labels[0:len(kubeTimes)], kubeTimes, label = "Kubernetes") 
     plt.xlabel("Nº Samples")
     plt.ylabel("Time (s)")
     plt.legend()
@@ -228,9 +166,7 @@ finally:
 
 
     plt.figure()
-    for i, speedup in enumerate(speedups_proc):
-        plt.plot(y_labels[0:len(speedup)], speedup, label = f"speedup-{i+BASE_PROCS}procs")
-
+    plt.plot(y_labels[0:len(speedUps)], speedUps, label = "speedups")
     plt.xlabel("Nº Samples")
     plt.ylabel("SpeedUp")
     plt.legend()
