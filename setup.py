@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
   name = 'KubePipe',        
   packages = ['KubePipe'],  
-  version = '0.1',      
+  version = '0.1.1',      
   license='MIT',       
   description = 'Tool to paralelize execution of multiple pipelines of machine learning using kubernetes',   
   author = 'Daniel Suárez Labena',                 
