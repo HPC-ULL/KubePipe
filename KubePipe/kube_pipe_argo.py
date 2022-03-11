@@ -26,7 +26,7 @@ from dateutil.tz import tzutc
 
 from argo_workflows.exceptions import NotFoundException
 
-from .Kube_pipe import KubePipe
+from .Kube_pipe import Kube_pipe_base
 
 BUCKET_PATH = ".kubetmp"
 
@@ -34,7 +34,7 @@ BUCKET_PATH = ".kubetmp"
 def make_kube_pipeline(*args, **kwargs):
     return Kube_pipe(*args, **kwargs)
 
-class Kube_pipe(KubePipe):
+class Kube_pipe(Kube_pipe_base):
 
     def __init__(self,*args, argo_ip = None, minio_ip = None, access_key = None, secret_key = None):
         super().__init__(*args, argo_ip = argo_ip, minio_ip = minio_ip, access_key = access_key, secret_key = secret_key)
