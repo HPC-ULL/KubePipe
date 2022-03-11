@@ -24,6 +24,8 @@ import atexit
 import datetime
 from dateutil.tz import tzutc
 
+from .Kube_pipe import KubePipe
+
 from argo_workflows.exceptions import NotFoundException
 
 
@@ -32,91 +34,12 @@ BUCKET_PATH = ".kubetmp"
 def make_kube_pipeline(*args, **kwargs):
     return Kube_pipe(*args, **kwargs)
 
-class Kube_pipe():
+class Kube_pipe(KubePipe):
 
     def __init__(self,*args, argo_ip = None, minio_ip = None, access_key = None, secret_key = None):
+        super().__init__(*args, argo_ip = argo_ip, minio_ip = minio_ip, access_key = access_key, secret_key = secret_key)
 
-        self.id = str(uuid.uuid4())[:8]
-          
-        self.pipelines = []
-        for arg in args:
-            self.pipelines.append({
-                "id" : str(uuid.uuid4())[:10],
-                "funcs" : arg
-            })
-
-        self.tmpFolder = "/tmp"
-
-        self.kuberesources = None
-
-        self.concurrent_pipelines = None
-
-        self.namespace = "argo"
-
-        self.models = None
-
-        config.load_kube_config()
-        self.api = client.CoreV1Api()
-
-        if not minio_ip: minio_ip  = self.api.read_namespaced_service("minio",self.namespace).status.load_balancer.ingress[0].ip + ":9000"
-
-        configuration = argo_workflows.Configuration(host=argo_ip, discard_unknown_keys=True)
-        configuration.verify_ssl = False
-
-        artifactsConfig = yaml.safe_load(self.api.read_namespaced_config_map("artifact-repositories","argo").data["default-v1"])["s3"]
-
-        if not access_key: access_key = base64.b64decode(self.api.read_namespaced_secret(artifactsConfig["accessKeySecret"]["name"], self.namespace).data[artifactsConfig["accessKeySecret"]["key"]]).decode("utf-8")
-        if not secret_key: secret_key = base64.b64decode(self.api.read_namespaced_secret(artifactsConfig["secretKeySecret"]["name"], self.namespace).data[artifactsConfig["secretKeySecret"]["key"]]).decode("utf-8")
-
-        self.minioclient = Minio(
-            minio_ip,
-            access_key=access_key,
-            secret_key=secret_key,
-            secure=not artifactsConfig["insecure"]
-        )
-
-        self.access_key = access_key
-        self.secret_key = secret_key
-
-        self.bucket = artifactsConfig["bucket"]
-
-        if not self.minioclient.bucket_exists(self.bucket):
-            self.minioclient.make_bucket(self.bucket)
-
-        atexit.register(lambda : self.deleteFiles(f"{BUCKET_PATH}/{self.id}/"))
-
-
-    def uploadVariable(self, var, name, prefix = ""):
-        with open(f'{self.tmpFolder}/{name}.tmp', 'wb') as handle:
-            pickle.dump(var, handle)
-
-        if(prefix!= ""):
-            prefix +="/"
-
-        self.minioclient.fput_object(
-            self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f'{self.tmpFolder}/{name}.tmp',
-        )
-
-        os.remove(f'{self.tmpFolder}/{name}.tmp')
-
-
-    def downloadVariable(self,name, prefix = ""):
-
-        if(prefix!= ""):
-            prefix +="/"
-
-        self.minioclient.fget_object(self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f"{self.tmpFolder}/{name}.tmp")
-
-            
-        with open(f"{self.tmpFolder}/{name}.tmp","rb") as outfile:
-            var = pickle.load(outfile)
-
-        os.remove(f"{self.tmpFolder}/{name}.tmp")
-
-        return var
-
-
-
+        
     def workflow(self, funcs,name, pipeId, operation= "fit(X,y)"):
 
 
@@ -191,21 +114,14 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
             spec=spec
             )
 
-        api_response = self.api.create_namespaced_pod(
+        api_response = self.kubeApi.create_namespaced_pod(
         body=body,
         namespace=self.namespace)
         print("\nLanzado el pipeline: '" + workflowname + "'")
         return workflowname
 
 
-    def deleteFiles(self, prefix):
-        objects_to_delete = self.minioclient.list_objects(self.bucket, prefix=prefix, recursive=True)
-        for obj in objects_to_delete:
-            self.minioclient.remove_object(self.bucket, obj.object_name)
-        print(f"Artifacts deleted from {prefix}")
-
-
-    def runWorkflows(self, X, y, operation, name, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None):
+    def runPipelines(self, X, y, operation, name, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None):
 
         if pipeIndex == None:
             pipeIndex = range(len(self.pipelines))
@@ -228,7 +144,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
             #Check that no more than "concurrent_pipelines" are running at the same time, wait for a workflow to finish
             if(len(workflows) >= concurrent_pipelines):
-                finishedWorkflows = self.waitForWorkflows(workflows,numberToWait=1)
+                finishedWorkflows = self.waitForPipelines(workflows,numberToWait=1)
                 for workflow in finishedWorkflows:
                     workflows.remove(workflow)
         
@@ -242,7 +158,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
             workflows.append(self.workflow( funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], operation = operation))
         
         if(len(workflows) > 0):
-            self.waitForWorkflows(workflows)
+            self.waitForPipelines(workflows)
         
         outputs = []
 
@@ -253,25 +169,23 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
 
     def fit(self,X,y, resources = None, concurrent_pipelines = None):
-        output = self.runWorkflows(X,y,"fit(X,y)", "fit", resources = resources, concurrent_pipelines = concurrent_pipelines)
+        output = self.runPipelines(X,y,"fit(X,y)", "fit", resources = resources, concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
         return output
         
 
-
-    def config(self, resources = None, function_resources = None, concurrent_pipelines = None, namespace = None, tmpFolder = None):
+    def config(self, resources = None,  concurrent_pipelines = None, namespace = None, tmpFolder = None):
         
         if namespace: self.namespace = namespace
         if tmpFolder: self.tmpFolder = tmpFolder
         if resources: self.kuberesources = resources 
-        if function_resources: self.function_resources = function_resources
         if concurrent_pipelines: self.concurrent_pipelines = concurrent_pipelines
 
 
 
-    def waitForWorkflows(self,workflowNames, numberToWait = None):
+    def waitForPipelines(self,workflowNames, numberToWait = None):
 
         if(numberToWait == None):
             numberToWait = len(workflowNames)    
@@ -285,7 +199,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
                     workflow = None
 
                     try:
-                        workflow = self.api.read_namespaced_pod_status(
+                        workflow = self.kubeApi.read_namespaced_pod_status(
                                 name =  workflowName,
                                 namespace=self.namespace)
 
@@ -295,7 +209,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
                             print(f"\nWorkflow '{workflowName}' has finished."u'\u2713')
                              
-                            api_response = self.api.delete_namespaced_pod(workflowName, self.namespace)
+                            api_response = self.kubeApi.delete_namespaced_pod(workflowName, self.namespace)
                             
                             
                             finished.append(workflowName)
