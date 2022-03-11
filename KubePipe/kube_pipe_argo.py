@@ -26,7 +26,7 @@ from dateutil.tz import tzutc
 
 from argo_workflows.exceptions import NotFoundException
 
-from .Kube_pipe import Kube_pipe_base
+from .kube_pipe import Kube_pipe_base
 
 BUCKET_PATH = ".kubetmp"
 

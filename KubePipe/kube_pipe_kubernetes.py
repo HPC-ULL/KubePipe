@@ -24,7 +24,7 @@ import atexit
 import datetime
 from dateutil.tz import tzutc
 
-from .Kube_pipe import Kube_pipe_base
+from .kube_pipe import Kube_pipe_base
 
 from argo_workflows.exceptions import NotFoundException
 
