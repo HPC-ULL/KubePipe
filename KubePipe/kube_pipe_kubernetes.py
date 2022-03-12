@@ -275,7 +275,7 @@ class Kube_pipe():
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating score")
 
-        out =  self.runWorkflows(X,y,"score(X,y)", "score",  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
+        out =  self.runPipelines(X,y,"score(X,y)", "score",  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -286,7 +286,7 @@ class Kube_pipe():
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating score_samples")
 
-        out =  self.runWorkflows(X,None,"score_samples(X)", "score_samples",   resources = resources, pipeIndex=pipe_index,concurrent_pipelines = concurrent_pipelines)
+        out =  self.runPipelines(X,None,"score_samples(X)", "score_samples",   resources = resources, pipeIndex=pipe_index,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -297,7 +297,7 @@ class Kube_pipe():
         if self.pipelines == None or self.models == None:
             raise Exception("Transformer must be fitted before transform")
 
-        out =  self.runWorkflows(X, None, "transform(X)", "transform" , resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X",concurrent_pipelines = concurrent_pipelines)
+        out =  self.runPipelines(X, None, "transform(X)", "transform" , resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X",concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -309,7 +309,7 @@ class Kube_pipe():
         if self.pipelines == None or self.models == None:
             raise Exception("Transformer must be fitted before inverse_transform")
 
-        out =  self.runWorkflows(X, None, "transform(X)", "inverse_transform" ,resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1][::-1], output = "X",concurrent_pipelines = concurrent_pipelines)
+        out =  self.runPipelines(X, None, "transform(X)", "inverse_transform" ,resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1][::-1], output = "X",concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -320,7 +320,7 @@ class Kube_pipe():
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating predict_proba")
 
-        out =  self.runWorkflows(X, None, "predict_proba(X)", "predict_proba",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+        out =  self.runPipelines(X, None, "predict_proba(X)", "predict_proba",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -330,7 +330,7 @@ class Kube_pipe():
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating predict_log_proba")
 
-        out =  self.runWorkflows(X, None, "predict_log_proba(X)", "predict_log_proba",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+        out =  self.runPipelines(X, None, "predict_log_proba(X)", "predict_log_proba",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -340,7 +340,7 @@ class Kube_pipe():
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating predict")
 
-        out =  self.runWorkflows(X, None, "predict(X)", "predict",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+        out =  self.runPipelines(X, None, "predict(X)", "predict",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -351,7 +351,7 @@ class Kube_pipe():
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating predict")
 
-        out =  self.runWorkflows(X, None, "decision_function(X)", "decision_function",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+        out =  self.runPipelines(X, None, "decision_function(X)", "decision_function",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -359,7 +359,7 @@ class Kube_pipe():
         
     def fit_predict(self, X, y, resources = None, pipeIndex = None, concurrent_pipelines = None):
 
-        out = self.runWorkflows(X, y, "fit_predict(X,y)", "fit_predict",  fitData = True, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+        out = self.runPipelines(X, y, "fit_predict(X,y)", "fit_predict",  fitData = True, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -386,7 +386,7 @@ class Kube_pipe():
 
 
 
-    def waitForWorkflows(self,workflowNames, numberToWait = None):
+    def waitForPipelines(self,workflowNames, numberToWait = None):
 
         if(numberToWait == None):
             numberToWait = len(workflowNames)    
