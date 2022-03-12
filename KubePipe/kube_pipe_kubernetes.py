@@ -117,95 +117,106 @@ class Kube_pipe():
 
 
 
-    def workflow(self, funcs,name, pipeId, operation= "fit(X,y)"):
+    def workflow(self, funcs,name, pipeId, operation= "fit(X,y)", fitData = False, resources = None):
+
+            if(resources == None):
+                resources = self.kuberesources
 
 
-        self.uploadVariable(funcs,"funcs","tmp")
+            self.uploadVariable(funcs,"funcs","tmp")
 
-        code = f"""
-import cloudpickle as pickle
+            code = f"""
+    import cloudpickle as pickle
 
-from sklearn.pipeline import make_pipeline
+    from sklearn.pipeline import make_pipeline
 
-from minio import Minio
+    from minio import Minio
 
-import os
+    import os
 
-minioclient = Minio(
-            'minio:9000',
-            access_key='{self.access_key}',
-            secret_key='{self.secret_key}',
-            secure=False
-)
-
-
-minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/X', '/tmp/X')
-with open(\'/tmp/X\', \'rb\') as input_file:
-    X = pickle.load(input_file)
-    print("Loaded x")
-os.remove('/tmp/X')
-
-minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/y', '/tmp/y')
-with open(\'/tmp/y\', \'rb\') as input_file:
-    y = pickle.load(input_file)
-    print("Loaded y")
-os.remove('/tmp/y')
+    minioclient = Minio(
+                'minio:9000',
+                access_key='{self.access_key}',
+                secret_key='{self.secret_key}',
+                secure=False
+    )
 
 
-minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/funcs', '/tmp/funcs')
-with open(\'/tmp/funcs\', \'rb\') as input_file:
-    funcs = pickle.load(input_file)
-    print("Loaded func")
-os.remove('/tmp/funcs')
+    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/X', '/tmp/X')
+    with open(\'/tmp/X\', \'rb\') as input_file:
+        X = pickle.load(input_file)
+        print("Loaded x")
+    os.remove('/tmp/X')
 
-pipe = make_pipeline(*funcs)
+    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/y', '/tmp/y')
+    with open(\'/tmp/y\', \'rb\') as input_file:
+        y = pickle.load(input_file)
+        print("Loaded y")
+    os.remove('/tmp/y')
 
-output = pipe.{operation}
 
-with open('/tmp/out', \'wb\') as handle:
-    pickle.dump(output, handle)
+    if({fitData}):
+        minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/funcs', '/tmp/funcs')
+        with open(\'/tmp/funcs\', \'rb\') as input_file:
+            funcs = pickle.load(input_file)
+            print("Loaded func")
+        os.remove('/tmp/funcs')
+
+        pipe = make_pipeline(*funcs)
+    else:
+        minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/pipe', '/tmp/pipe')
+        with open(\'/tmp/pipe\', \'rb\') as input_file:
+            pipe = pickle.load(input_file)
+            print("Loaded pipe")
+        os.remove('/tmp/pipe')
 
 
-minioclient.fput_object(
-            '{self.bucket}', '{BUCKET_PATH}/{self.id}/{pipeId}', '/tmp/out',
-)
+    output = pipe.{operation}
 
-print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
+    with open('/tmp/out', \'wb\') as handle:
+        pickle.dump(output, handle)
 
-"""    
-        command = ["python3" ,"-c", code]
-        container = client.V1Container(
-            name=f"{pipeId}",
-            image="alu0101040882/kubepipe:p3.7.3-minio",
-            command=command
-            
+
+    minioclient.fput_object(
+                '{self.bucket}', '{BUCKET_PATH}/{self.id}/{pipeId}', '/tmp/out',
+    )
+
+    if({fitData}):
+        minioclient.fput_object(
+                '{self.bucket}', '{BUCKET_PATH}/{self.id}/pipe', '/tmp/out',
         )
 
-        spec=client.V1PodSpec(restart_policy="Never", containers=[container])
 
-        workflowname = f"pipeline-{name}-{self.id}-{pipeId}"
-        body = client.V1Job(
-            api_version="v1",
-            kind="Pod",
-            metadata=client.V1ObjectMeta(name=workflowname),
-            spec=spec
+    print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
+
+    """    
+            command = ["python3" ,"-c", code]
+            container = client.V1Container(
+                name=f"{pipeId}",
+                image="alu0101040882/kubepipe:p3.7.3-minio",
+                command=command,
+                resources = client.V1ResourceRequirements(limits=resources)
+                
             )
 
-        api_response = self.api.create_namespaced_pod(
-        body=body,
-        namespace=self.namespace)
-        print("\nLanzado el pipeline: '" + workflowname + "'")
-        return workflowname
+            spec=client.V1PodSpec(restart_policy="Never", containers=[container])
+
+            workflowname = f"pipeline-{name}-{self.id}-{pipeId}"
+            body = client.V1Job(
+                api_version="v1",
+                kind="Pod",
+                metadata=client.V1ObjectMeta(name=workflowname),
+                spec=spec
+                )
+
+            api_response = self.kubeApi.create_namespaced_pod(
+            body=body,
+            namespace=self.namespace)
+            print("\nLanzado el pipeline: '" + workflowname + "'")
+            return workflowname
 
 
-    def deleteFiles(self, prefix):
-        objects_to_delete = self.minioclient.list_objects(self.bucket, prefix=prefix, recursive=True)
-        for obj in objects_to_delete:
-            self.minioclient.remove_object(self.bucket, obj.object_name)
-        print(f"Artifacts deleted from {prefix}")
-
-
-    def runWorkflows(self, X, y, operation, name, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None):
+    def runPipelines(self, X, y, operation, name, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None, fitData = False):
 
         if pipeIndex == None:
             pipeIndex = range(len(self.pipelines))
@@ -228,7 +239,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
             #Check that no more than "concurrent_pipelines" are running at the same time, wait for a workflow to finish
             if(len(workflows) >= concurrent_pipelines):
-                finishedWorkflows = self.waitForWorkflows(workflows,numberToWait=1)
+                finishedWorkflows = self.waitForPipelines(workflows,numberToWait=1)
                 for workflow in finishedWorkflows:
                     workflows.remove(workflow)
         
@@ -239,10 +250,10 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
             if applyToFuncs is not None and callable(applyToFuncs):
                 funcs = applyToFuncs(funcs)
 
-            workflows.append(self.workflow( funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], operation = operation))
+            workflows.append(self.workflow( funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], operation = operation, fitData = fitData))
         
         if(len(workflows) > 0):
-            self.waitForWorkflows(workflows)
+            self.waitForPipelines(workflows)
         
         outputs = []
 
@@ -253,12 +264,116 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
 
     def fit(self,X,y, resources = None, concurrent_pipelines = None):
-        output = self.runWorkflows(X,y,"fit(X,y)", "fit", resources = resources, concurrent_pipelines = concurrent_pipelines)
+        output = self.runPipelines(X,y,"fit(X,y)", "fit", resources = resources, concurrent_pipelines = concurrent_pipelines, fitData=True)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
         return output
+
+    def score(self,X,y, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        if self.pipelines == None or self.models == None:
+            raise Exception("Model must be trained before calculating score")
+
+        out =  self.runWorkflows(X,y,"score(X,y)", "score",  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
+
+    def score_samples(self,X, resources = None, pipe_index = None, concurrent_pipelines = None):
+
+        if self.pipelines == None or self.models == None:
+            raise Exception("Model must be trained before calculating score_samples")
+
+        out =  self.runWorkflows(X,None,"score_samples(X)", "score_samples",   resources = resources, pipeIndex=pipe_index,concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
+
+    def transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        if self.pipelines == None or self.models == None:
+            raise Exception("Transformer must be fitted before transform")
+
+        out =  self.runWorkflows(X, None, "transform(X)", "transform" , resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X",concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
+
+
+    def inverse_transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        if self.pipelines == None or self.models == None:
+            raise Exception("Transformer must be fitted before inverse_transform")
+
+        out =  self.runWorkflows(X, None, "transform(X)", "inverse_transform" ,resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1][::-1], output = "X",concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
+
+
+    def predict_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+        if self.pipelines == None or self.models == None:
+            raise Exception("Model must be trained before calculating predict_proba")
+
+        out =  self.runWorkflows(X, None, "predict_proba(X)", "predict_proba",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
+
+    def predict_log_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+        if self.pipelines == None or self.models == None:
+            raise Exception("Model must be trained before calculating predict_log_proba")
+
+        out =  self.runWorkflows(X, None, "predict_log_proba(X)", "predict_log_proba",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
+
+    def predict(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+        if self.pipelines == None or self.models == None:
+            raise Exception("Model must be trained before calculating predict")
+
+        out =  self.runWorkflows(X, None, "predict(X)", "predict",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
+
+
+    def decision_function(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+        if self.pipelines == None or self.models == None:
+            raise Exception("Model must be trained before calculating predict")
+
+        out =  self.runWorkflows(X, None, "decision_function(X)", "decision_function",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
         
+    def fit_predict(self, X, y, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        out = self.runWorkflows(X, y, "fit_predict(X,y)", "fit_predict",  fitData = True, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
+
+        return out
+        
+
+
+   
+    def deleteFiles(self, prefix):
+        objects_to_delete = self.minioclient.list_objects(self.bucket, prefix=prefix, recursive=True)
+        for obj in objects_to_delete:
+            self.minioclient.remove_object(self.bucket, obj.object_name)
+        print(f"Artifacts deleted from {prefix}")
+
 
 
     def config(self, resources = None, function_resources = None, concurrent_pipelines = None, namespace = None, tmpFolder = None):

@@ -15,7 +15,8 @@ setup(
         'kubernetes',
         'minio',
         'PyYAML',
-        'scikit_learn==1.0.2'
+        'scikit_learn==1.0.2',
+        'cloudpickle'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',      
