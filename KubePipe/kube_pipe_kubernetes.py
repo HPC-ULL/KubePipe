@@ -272,8 +272,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
     def score(self,X,y, resources = None, pipeIndex = None, concurrent_pipelines = None):
 
-        if self.pipelines == None or self.models == None:
-            raise Exception("Model must be trained before calculating score")
+
 
         out =  self.runPipelines(X,y,"score(X,y)", "score",  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
@@ -283,8 +282,6 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
     def score_samples(self,X, resources = None, pipe_index = None, concurrent_pipelines = None):
 
-        if self.pipelines == None or self.models == None:
-            raise Exception("Model must be trained before calculating score_samples")
 
         out =  self.runPipelines(X,None,"score_samples(X)", "score_samples",   resources = resources, pipeIndex=pipe_index,concurrent_pipelines = concurrent_pipelines)
 
@@ -294,8 +291,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
     def transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
 
-        if self.pipelines == None or self.models == None:
-            raise Exception("Transformer must be fitted before transform")
+
 
         out =  self.runPipelines(X, None, "transform(X)", "transform" , resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X",concurrent_pipelines = concurrent_pipelines)
 
@@ -306,8 +302,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
     def inverse_transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
 
-        if self.pipelines == None or self.models == None:
-            raise Exception("Transformer must be fitted before inverse_transform")
+
 
         out =  self.runPipelines(X, None, "transform(X)", "inverse_transform" ,resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1][::-1], output = "X",concurrent_pipelines = concurrent_pipelines)
 
@@ -317,8 +312,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
 
     def predict_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        if self.pipelines == None or self.models == None:
-            raise Exception("Model must be trained before calculating predict_proba")
+
 
         out =  self.runPipelines(X, None, "predict_proba(X)", "predict_proba",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
@@ -327,8 +321,6 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
         return out
 
     def predict_log_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        if self.pipelines == None or self.models == None:
-            raise Exception("Model must be trained before calculating predict_log_proba")
 
         out =  self.runPipelines(X, None, "predict_log_proba(X)", "predict_log_proba",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
@@ -337,8 +329,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
         return out
 
     def predict(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        if self.pipelines == None or self.models == None:
-            raise Exception("Model must be trained before calculating predict")
+
 
         out =  self.runPipelines(X, None, "predict(X)", "predict",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
@@ -348,8 +339,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
 
     def decision_function(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        if self.pipelines == None or self.models == None:
-            raise Exception("Model must be trained before calculating predict")
+
 
         out =  self.runPipelines(X, None, "decision_function(X)", "decision_function",  resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
