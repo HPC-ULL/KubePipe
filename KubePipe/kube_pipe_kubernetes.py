@@ -126,68 +126,68 @@ class Kube_pipe():
             self.uploadVariable(funcs,"funcs","tmp")
 
             code = f"""
-    import cloudpickle as pickle
+import cloudpickle as pickle
 
-    from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import make_pipeline
 
-    from minio import Minio
+from minio import Minio
 
-    import os
+import os
 
-    minioclient = Minio(
-                'minio:9000',
-                access_key='{self.access_key}',
-                secret_key='{self.secret_key}',
-                secure=False
-    )
-
-
-    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/X', '/tmp/X')
-    with open(\'/tmp/X\', \'rb\') as input_file:
-        X = pickle.load(input_file)
-        print("Loaded x")
-    os.remove('/tmp/X')
-
-    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/y', '/tmp/y')
-    with open(\'/tmp/y\', \'rb\') as input_file:
-        y = pickle.load(input_file)
-        print("Loaded y")
-    os.remove('/tmp/y')
+minioclient = Minio(
+            'minio:9000',
+            access_key='{self.access_key}',
+            secret_key='{self.secret_key}',
+            secure=False
+)
 
 
-    if({fitData}):
-        minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/funcs', '/tmp/funcs')
-        with open(\'/tmp/funcs\', \'rb\') as input_file:
-            funcs = pickle.load(input_file)
-            print("Loaded func")
-        os.remove('/tmp/funcs')
+minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/X', '/tmp/X')
+with open(\'/tmp/X\', \'rb\') as input_file:
+    X = pickle.load(input_file)
+    print("Loaded x")
+os.remove('/tmp/X')
 
-        pipe = make_pipeline(*funcs)
-    else:
-        minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/pipe', '/tmp/pipe')
-        with open(\'/tmp/pipe\', \'rb\') as input_file:
-            pipe = pickle.load(input_file)
-            print("Loaded pipe")
-        os.remove('/tmp/pipe')
+minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/y', '/tmp/y')
+with open(\'/tmp/y\', \'rb\') as input_file:
+    y = pickle.load(input_file)
+    print("Loaded y")
+os.remove('/tmp/y')
 
 
-    output = pipe.{operation}
+if({fitData}):
+    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/funcs', '/tmp/funcs')
+    with open(\'/tmp/funcs\', \'rb\') as input_file:
+        funcs = pickle.load(input_file)
+        print("Loaded func")
+    os.remove('/tmp/funcs')
 
-    with open('/tmp/out', \'wb\') as handle:
-        pickle.dump(output, handle)
+    pipe = make_pipeline(*funcs)
+else:
+    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/pipe', '/tmp/pipe')
+    with open(\'/tmp/pipe\', \'rb\') as input_file:
+        pipe = pickle.load(input_file)
+        print("Loaded pipe")
+    os.remove('/tmp/pipe')
 
 
+output = pipe.{operation}
+
+with open('/tmp/out', \'wb\') as handle:
+    pickle.dump(output, handle)
+
+
+minioclient.fput_object(
+            '{self.bucket}', '{BUCKET_PATH}/{self.id}/{pipeId}', '/tmp/out',
+)
+
+if({fitData}):
     minioclient.fput_object(
-                '{self.bucket}', '{BUCKET_PATH}/{self.id}/{pipeId}', '/tmp/out',
+            '{self.bucket}', '{BUCKET_PATH}/{self.id}/pipe', '/tmp/out',
     )
 
-    if({fitData}):
-        minioclient.fput_object(
-                '{self.bucket}', '{BUCKET_PATH}/{self.id}/pipe', '/tmp/out',
-        )
 
-
-    print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
+print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
     """    
             command = ["python3" ,"-c", code]
