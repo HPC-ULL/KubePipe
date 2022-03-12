@@ -37,7 +37,7 @@ def make_kube_pipeline(*args, **kwargs):
 class Kube_pipe(Kube_pipe_base):
 
     def __init__(self,*args, argo_ip = None, minio_ip = None, access_key = None, secret_key = None):
-        super().__init__(*args, argo_ip = argo_ip, minio_ip = minio_ip, access_key = access_key, secret_key = secret_key)
+        super().__init__(self,*args, argo_ip = argo_ip, minio_ip = minio_ip, access_key = access_key, secret_key = secret_key)
 
 
         config.load_kube_config()
