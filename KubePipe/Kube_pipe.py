@@ -30,7 +30,7 @@ from argo_workflows.exceptions import NotFoundException
 BUCKET_PATH = ".kubetmp"
 
 
-class Kube_pipe_base():
+class Kube_pipe():
 
     def __init__(self,*args, argo_ip = None, minio_ip = None, access_key = None, secret_key = None):
 
