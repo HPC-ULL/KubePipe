@@ -26,7 +26,6 @@ from dateutil.tz import tzutc
 
 from argo_workflows.exceptions import NotFoundException
 
-from .Kube_pipe import KubePipe
 
 BUCKET_PATH = ".kubetmp"
 
@@ -34,13 +33,36 @@ BUCKET_PATH = ".kubetmp"
 def make_kube_pipeline(*args, **kwargs):
     return Kube_pipe(*args, **kwargs)
 
-class Kube_pipe(KubePipe):
+class Kube_pipe():
 
     def __init__(self,*args, argo_ip = None, minio_ip = None, access_key = None, secret_key = None):
-        super().__init__(*args, argo_ip = argo_ip, minio_ip = minio_ip, access_key = access_key, secret_key = secret_key)
 
+        self.id = str(uuid.uuid4())[:8]
+          
+        self.pipelines = []
+        for arg in args:
+            self.pipelines.append({
+                "id" : str(uuid.uuid4())[:10],
+                "funcs" : arg
+            })
+
+        self.tmpFolder = "/tmp"
+
+        self.kuberesources = None
+
+        self.concurrent_pipelines = None
+
+        self.function_resources = {}
+
+        self.namespace = "argo"
+
+        self.models = None
 
         config.load_kube_config()
+        kubeapi = client.CoreV1Api()
+
+        if not argo_ip: argo_ip = "https://" + kubeapi.read_namespaced_service("argo-server","argo").status.load_balancer.ingress[0].ip + ":2746"
+        if not minio_ip: minio_ip  = kubeapi.read_namespaced_service("minio","argo").status.load_balancer.ingress[0].ip + ":9000"
 
         configuration = argo_workflows.Configuration(host=argo_ip, discard_unknown_keys=True)
         configuration.verify_ssl = False
@@ -48,6 +70,55 @@ class Kube_pipe(KubePipe):
         api_client = argo_workflows.ApiClient(configuration)
         self.api = workflow_service_api.WorkflowServiceApi(api_client)
 
+        artifactsConfig = yaml.safe_load(kubeapi.read_namespaced_config_map("artifact-repositories","argo").data["default-v1"])["s3"]
+
+        if not access_key: access_key = base64.b64decode(kubeapi.read_namespaced_secret(artifactsConfig["accessKeySecret"]["name"], "argo").data[artifactsConfig["accessKeySecret"]["key"]]).decode("utf-8")
+        if not secret_key: secret_key = base64.b64decode(kubeapi.read_namespaced_secret(artifactsConfig["secretKeySecret"]["name"], "argo").data[artifactsConfig["secretKeySecret"]["key"]]).decode("utf-8")
+
+        self.minioclient = Minio(
+            minio_ip,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=not artifactsConfig["insecure"]
+        )
+
+        self.bucket = artifactsConfig["bucket"]
+
+        if not self.minioclient.bucket_exists(self.bucket):
+            self.minioclient.make_bucket(self.bucket)
+
+        atexit.register(lambda : self.deleteFiles(f"{BUCKET_PATH}/{self.id}/"))
+
+
+
+    def uploadVariable(self, var, name, prefix = ""):
+        with open(f'{self.tmpFolder}/{name}.tmp', 'wb') as handle:
+            pickle.dump(var, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        if(prefix!= ""):
+            prefix +="/"
+
+        self.minioclient.fput_object(
+            self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f'{self.tmpFolder}/{name}.tmp',
+        )
+
+        os.remove(f'{self.tmpFolder}/{name}.tmp')
+
+
+    def downloadVariable(self,name, prefix = ""):
+
+        if(prefix!= ""):
+            prefix +="/"
+
+        self.minioclient.fget_object(self.bucket, f"{BUCKET_PATH}/{self.id}/{prefix}{name}", f"{self.tmpFolder}/{name}.tmp")
+
+            
+        with open(f"{self.tmpFolder}/{name}.tmp","rb") as outfile:
+            var = pickle.load(outfile)
+
+        os.remove(f"{self.tmpFolder}/{name}.tmp")
+
+        return var
 
 
     def workflow(self,X,y,funcs,name, pipeId, resources = None, fitdata = True, operation= "fit(X,y)"):
@@ -165,6 +236,14 @@ else:
    
         return self.launchFromManifest(workflow)
 
+
+    def deleteFiles(self, prefix):
+        objects_to_delete = self.minioclient.list_objects(self.bucket, prefix=prefix, recursive=True)
+        for obj in objects_to_delete:
+            self.minioclient.remove_object(self.bucket, obj.object_name)
+        print(f"Artifacts deleted from {prefix}")
+
+
     def runWorkflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None):
 
         if pipeIndex == None:
@@ -212,6 +291,7 @@ else:
         return outputs
 
 
+
     def fit(self,X,y, resources = None, concurrent_pipelines = None):
         self.models = self.runWorkflows(X,y,"fit(X,y)", "fit", True, resources = resources, concurrent_pipelines = concurrent_pipelines)
 
@@ -230,12 +310,12 @@ else:
 
         return out
 
-    def score_samples(self,X, resources = None, pipe_index = None, concurrent_pipelines = None):
+    def score_samples(self,X, resources = None, pipeIndex = None, concurrent_pipelines = None):
 
         if self.pipelines == None or self.models == None:
             raise Exception("Model must be trained before calculating score_samples")
 
-        out =  self.runWorkflows(X,None,"score_samples(X)", "score_samples",  False,  resources = resources, pipeIndex=pipe_index,concurrent_pipelines = concurrent_pipelines)
+        out =  self.runWorkflows(X,None,"score_samples(X)", "score_samples",  False,  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
         self.deleteFiles(f"{BUCKET_PATH}/{self.id}/tmp")
 
@@ -314,10 +394,10 @@ else:
         return out
 
 
-    def config(self, resources = None, function_resources = None, concurrent_pipelines = None, namespace = None, tmp_folder = None):
+    def config(self, resources = None, function_resources = None, concurrent_pipelines = None, namespace = None, tmpFolder = None):
         
         if namespace: self.namespace = namespace
-        if tmp_folder: self.tmp_folder = tmp_folder
+        if tmpFolder: self.tmpFolder = tmpFolder
         if resources: self.kuberesources = resources 
         if function_resources: self.function_resources = function_resources
         if concurrent_pipelines: self.concurrent_pipelines = concurrent_pipelines
