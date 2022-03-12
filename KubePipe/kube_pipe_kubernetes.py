@@ -56,17 +56,17 @@ class Kube_pipe():
         self.models = None
 
         config.load_kube_config()
-        self.api = client.CoreV1Api()
+        self.kubeApi = client.CoreV1Api()
 
-        if not minio_ip: minio_ip  = self.api.read_namespaced_service("minio",self.namespace).status.load_balancer.ingress[0].ip + ":9000"
+        if not minio_ip: minio_ip  = self.kubeApi.read_namespaced_service("minio",self.namespace).status.load_balancer.ingress[0].ip + ":9000"
 
         configuration = argo_workflows.Configuration(host=argo_ip, discard_unknown_keys=True)
         configuration.verify_ssl = False
 
-        artifactsConfig = yaml.safe_load(self.api.read_namespaced_config_map("artifact-repositories","argo").data["default-v1"])["s3"]
+        artifactsConfig = yaml.safe_load(self.kubeApi.read_namespaced_config_map("artifact-repositories","argo").data["default-v1"])["s3"]
 
-        if not access_key: access_key = base64.b64decode(self.api.read_namespaced_secret(artifactsConfig["accessKeySecret"]["name"], self.namespace).data[artifactsConfig["accessKeySecret"]["key"]]).decode("utf-8")
-        if not secret_key: secret_key = base64.b64decode(self.api.read_namespaced_secret(artifactsConfig["secretKeySecret"]["name"], self.namespace).data[artifactsConfig["secretKeySecret"]["key"]]).decode("utf-8")
+        if not access_key: access_key = base64.b64decode(self.kubeApi.read_namespaced_secret(artifactsConfig["accessKeySecret"]["name"], self.namespace).data[artifactsConfig["accessKeySecret"]["key"]]).decode("utf-8")
+        if not secret_key: secret_key = base64.b64decode(self.kubeApi.read_namespaced_secret(artifactsConfig["secretKeySecret"]["name"], self.namespace).data[artifactsConfig["secretKeySecret"]["key"]]).decode("utf-8")
 
         self.minioclient = Minio(
             minio_ip,
@@ -400,7 +400,7 @@ class Kube_pipe():
                     workflow = None
 
                     try:
-                        workflow = self.api.read_namespaced_pod_status(
+                        workflow = self.kubeApi.read_namespaced_pod_status(
                                 name =  workflowName,
                                 namespace=self.namespace)
 
@@ -410,7 +410,7 @@ class Kube_pipe():
 
                             print(f"\nWorkflow '{workflowName}' has finished."u'\u2713')
                              
-                            api_response = self.api.delete_namespaced_pod(workflowName, self.namespace)
+                            api_response = self.kubeApi.delete_namespaced_pod(workflowName, self.namespace)
                             
                             
                             finished.append(workflowName)
