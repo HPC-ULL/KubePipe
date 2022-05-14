@@ -1,7 +1,7 @@
 import os
 from time import sleep
 import yaml
-import cloudpickle as pickle
+import dill as pickle
 
 import argo_workflows
 from argo_workflows.api import workflow_service_api
@@ -26,6 +26,8 @@ from dateutil.tz import tzutc
 
 from argo_workflows.exceptions import NotFoundException
 
+from torch import nn, jit
+
 
 BUCKET_PATH = ".kubetmp"
 
@@ -45,7 +47,7 @@ class Kube_pipe():
                 "funcs" : arg
             })
 
-        self.tmpFolder = "/tmp"
+        self.tmpFolder = "tmp"
 
         self.kuberesources = None
 
@@ -87,8 +89,13 @@ class Kube_pipe():
 
 
     def uploadVariable(self, var, name, prefix = ""):
-        with open(f'{self.tmpFolder}/{name}.tmp', 'wb') as handle:
-            pickle.dump(var, handle)
+
+        if(isinstance(var,nn.Module)):
+            model_scripted = jit.script(var)
+            model_scripted.save(f'{self.tmpFolder}/{name}.tmp')
+        else:
+            with open(f'{self.tmpFolder}/{name}.tmp', 'wb') as handle:
+                pickle.dump(var, handle)
 
         if(prefix!= ""):
             prefix +="/"
@@ -123,12 +130,15 @@ class Kube_pipe():
                 resources = self.kuberesources
 
 
-            self.uploadVariable(funcs,"funcs","tmp")
+            self.uploadVariable(funcs,f"funcs{pipeId}","tmp")
 
             code = f"""
-import cloudpickle as pickle
+import dill as pickle
 
 from sklearn.pipeline import make_pipeline
+
+import torch
+
 
 from minio import Minio
 
@@ -156,7 +166,7 @@ os.remove('/tmp/y')
 
 
 if({fitData}):
-    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/funcs', '/tmp/funcs')
+    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/funcs{pipeId}', '/tmp/funcs')
     with open(\'/tmp/funcs\', \'rb\') as input_file:
         funcs = pickle.load(input_file)
         print("Loaded func")
@@ -164,7 +174,7 @@ if({fitData}):
 
     pipe = make_pipeline(*funcs)
 else:
-    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/pipe', '/tmp/pipe')
+    minioclient.fget_object('{self.bucket}', '{BUCKET_PATH}/{self.id}/{pipeId}pipe', '/tmp/pipe')
     with open(\'/tmp/pipe\', \'rb\') as input_file:
         pipe = pickle.load(input_file)
         print("Loaded pipe")
@@ -178,12 +188,12 @@ with open('/tmp/out', \'wb\') as handle:
 
 
 minioclient.fput_object(
-            '{self.bucket}', '{BUCKET_PATH}/{self.id}/{pipeId}', '/tmp/out',
+            '{self.bucket}', '{BUCKET_PATH}/{self.id}/tmp/{pipeId}', '/tmp/out',
 )
 
 if({fitData}):
     minioclient.fput_object(
-            '{self.bucket}', '{BUCKET_PATH}/{self.id}/pipe', '/tmp/out',
+            '{self.bucket}', '{BUCKET_PATH}/{self.id}/{pipeId}pipe', '/tmp/out',
     )
 
 
@@ -193,7 +203,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
             command = ["python3" ,"-c", code]
             container = client.V1Container(
                 name=f"{pipeId}",
-                image="alu0101040882/kubepipe:p3.7.3-minio",
+                image="localhost:31320/torchandsklearn:p3.9.12",
                 command=command,
                 resources = client.V1ResourceRequirements(limits=resources)
                 
@@ -251,14 +261,15 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
                 funcs = applyToFuncs(funcs)
 
             workflows.append(self.workflow( funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], operation = operation, fitData = fitData))
+
         
         if(len(workflows) > 0):
             self.waitForPipelines(workflows)
         
         outputs = []
 
-        for i, index in enumerate(pipeIndex):
-            outputs.append(self.downloadVariable(f"{self.pipelines[index]['id']}"))
+        for index in pipeIndex:
+            outputs.append(self.downloadVariable(f"{self.pipelines[index]['id']}", prefix = "tmp"))
 
         return outputs
 
@@ -271,8 +282,6 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
         return output
 
     def score(self,X,y, resources = None, pipeIndex = None, concurrent_pipelines = None):
-
-
 
         out =  self.runPipelines(X,y,"score(X,y)", "score",  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
 
@@ -400,7 +409,7 @@ print('Output exported to {BUCKET_PATH}/{self.id}/{pipeId}' )
 
                             print(f"\nWorkflow '{workflowName}' has finished."u'\u2713')
                              
-                            api_response = self.kubeApi.delete_namespaced_pod(workflowName, self.namespace)
+                            #api_response = self.kubeApi.delete_namespaced_pod(workflowName, self.namespace)
                             
                             
                             finished.append(workflowName)
