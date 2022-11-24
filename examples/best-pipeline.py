@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn import datasets
 
-from KubePipe.kube_pipe_kubernetes import make_kube_pipeline, Kube_pipe
+from  KubePipe.kube_pipe_kubernetes import make_kube_pipeline, Kube_pipe
 
 
 iris = datasets.load_iris()
@@ -22,7 +22,9 @@ X_train, X_test, y_train, y_test = train_test_split(
 pipelines = Kube_pipe(
     [StandardScaler(), AdaBoostClassifier()],
     [OneHotEncoder(), LogisticRegression()],
-    [StandardScaler(), RandomForestClassifier()]
+    [StandardScaler(), RandomForestClassifier()],
+
+    minio_ip = "localhost:9000"
 )
 
 # Configurar los pipelines
@@ -31,7 +33,8 @@ pipelines.config(resources={"memory":  "100Mi", "cpu": 1},
                      AdaBoostClassifier()     : {"memory" :  "200Mi" },
                      LogisticRegression()     : {"memory" :  "200Mi" }, 
                      RandomForestClassifier() : {"memory" :  "200Mi" } },
-                 concurrent_pipelines=1
+                 concurrent_pipelines=1,
+                 tmpFolder="tmp"
                  )
 
 # Ajustar a los datos

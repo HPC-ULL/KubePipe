@@ -1,7 +1,7 @@
 from distutils.core import setup
 setup(
-  name = 'KubePipe',        
-  packages = ['KubePipe'],  
+  name = 'kube_pipe',        
+  packages = ['kube_pipe', 'pytorch_wrapper'],  
   version = '0.1.1',      
   license='MIT',       
   description = 'Tool to paralelize execution of multiple pipelines of machine learning using kubernetes',   
@@ -16,7 +16,8 @@ setup(
         'minio',
         'PyYAML',
         'scikit_learn==1.0.2',
-        'cloudpickle'
+        'torch',
+        'dill'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',      

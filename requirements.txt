@@ -1,0 +1,7 @@
+argo-workflows==6.3.0rc2
+kubernetes
+minio
+PyYAML
+scikit_learn==1.0.2
+cloudpickle
+dill
