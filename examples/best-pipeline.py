@@ -1,6 +1,5 @@
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.preprocessing import StandardScaler
@@ -9,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn import datasets
 
-from  KubePipe.kube_pipe_kubernetes import make_kube_pipeline, Kube_pipe
+from  kube_pipe.kube_pipe_kubernetes import KubePipeKubernetes as KubePipe
 
 
 iris = datasets.load_iris()
@@ -19,12 +18,11 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 
 # Creación del objeto KubePipe
-pipelines = Kube_pipe(
+pipelines = KubePipe(
     [StandardScaler(), AdaBoostClassifier()],
     [OneHotEncoder(), LogisticRegression()],
-    [StandardScaler(), RandomForestClassifier()],
+    [StandardScaler(), RandomForestClassifier()]
 
-    minio_ip = "localhost:9000"
 )
 
 # Configurar los pipelines
