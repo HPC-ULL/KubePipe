@@ -3,9 +3,17 @@
 KubePipe is a tool to paralelize the execution of multiple Machine Learning pipelines in containers orchestated by Kubernetes.
 
 ## Installation
-
+Install Argo Workflows
 ```bash
-pip install git+https://github.com/dsuarezl/Pyeml
+kubectl create ns argo
+kubectl apply -n argo -f https://raw.githubusercontent.com/argoproj/argo-workflows/master/manifests/quick-start-postgres.yaml
+kubectl patch svc minio -n argo -p '{"spec": {"type": "LoadBalancer"}}'
+kubectl patch svc argo-server -n argo -p '{"spec": {"type": "LoadBalancer"}}'
+```
+
+Install KubePipe
+```bash
+pip install git+https://github.com/HPC-ULL/KubePipe
 ```
 
 ## Usage
