@@ -1,6 +1,7 @@
 #project specific files
 tmp
 build.sh
+images
 
 *.egg.info
 # Byte-compiled / optimized / DLL files
