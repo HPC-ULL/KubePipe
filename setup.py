@@ -1,7 +1,7 @@
 from distutils.core import setup
 setup(
   name = 'kube_pipe',        
-  packages = ['kube_pipe', 'pytorch_wrapper'],  
+  packages = ['kube_pipe'],  
   version = '0.1.1',      
   license='MIT',       
   description = 'Tool to paralelize execution of multiple pipelines of machine learning using kubernetes',   
