@@ -23,7 +23,6 @@ from .kube_pipe_base import KubePipeBase
 
 class KubePipeKubernetes(KubePipeBase):
 
-    
     def __init__(self,*args,  minio_ip = None, access_key = None, secret_key = None, minio_bucket_path = ".kubetmp", tmpFolder ="/tmp", namespace = "argo", **kwargs):
 
         
@@ -59,6 +58,8 @@ class KubePipeKubernetes(KubePipeBase):
         )
 
         self.bucket = artifactsConfig["bucket"]
+
+        self.node_selector = None
 
         if not self.minioclient.bucket_exists(self.bucket):
             self.minioclient.make_bucket(self.bucket)
@@ -108,7 +109,7 @@ class KubePipeKubernetes(KubePipeBase):
 
 
 
-    def workflow(self, funcs,name, pipeId, operation= "fit(X,y)", fitData = False, resources = None, node_selector = None, measure_energy = False):
+    def workflow(self, funcs,name, pipeId, operation= "fit(X,y)", fitData = False, resources = None, node_selector = None, measure_energy = False, additional_args = None):
 
             if(resources == None):
                 resources = self.kuberesources
@@ -120,17 +121,18 @@ class KubePipeKubernetes(KubePipeBase):
 
             self.upload_variable(funcs,f"funcs{pipeId}","tmp")
 
+            if(additional_args):
+                self.upload_variable(additional_args,f"add_args{pipeId}","tmp")
+
+
             code = f"""
 import dill as pickle
 
 from sklearn.pipeline import make_pipeline
 
-#from kube_pipe.utils.pytorch_wrapper import PytorchWrapper
-
 from minio import Minio
 
 import os
-#import torch
 
 minioclient = Minio(
             'minio:9000',
@@ -151,6 +153,15 @@ def work():
         y = pickle.load(input_file)
         print("Loaded y")
     os.remove('/tmp/y')
+
+    if({additional_args is not None}):
+        minioclient.fget_object('{self.bucket}', '{self.minio_bucket_path}/{self.id}/tmp/add_args{pipeId}', '/tmp/add_args')
+        with open(\'/tmp/add_args\', \'rb\') as input_file:
+            add_args = pickle.load(input_file)
+            print("Loaded add_args")
+        os.remove('/tmp/add_args')
+    else:
+        add_args = dict()
 
 
     if({fitData}):
@@ -199,7 +210,6 @@ else:
     work()
 
     """    
-
             volumes = []
             volume_mounts = []
 
@@ -210,7 +220,7 @@ else:
             command = ["python3" ,"-c", code]
             container = client.V1Container(
                 name=f"{pipeId}",
-                image="alu0101040882/kubepipe:3.9.13-alpine",
+                image="alu0101040882/kubepipe:p3.9.12-tensorflow",
                 command=command,
                 resources = client.V1ResourceRequirements(limits=resources),
                 volume_mounts=volume_mounts,
@@ -235,7 +245,7 @@ else:
             return workflowname
 
 
-    def run_pipelines(self, X, y, operation, name, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None, fitData = False, node_selector = None, return_output=True,measure_energy = False):
+    def run_pipelines(self, X, y, operation, name, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None, fitData = False, node_selector = None, return_output=True,measure_energy = False, additional_args = None):
 
         if pipeIndex == None:
             pipeIndex = range(len(self.pipelines))
@@ -269,7 +279,7 @@ else:
             if applyToFuncs is not None and callable(applyToFuncs):
                 funcs = applyToFuncs(funcs)
 
-            workflows.append(self.workflow( funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], operation = operation, fitData = fitData, node_selector=node_selector,measure_energy=measure_energy))
+            workflows.append(self.workflow( funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], operation = operation, fitData = fitData, node_selector=node_selector,measure_energy=measure_energy, additional_args = additional_args))
 
         
         if(len(workflows) > 0):
@@ -313,8 +323,18 @@ else:
                     
         return total_consumed
 
-    def fit(self,X,y, resources = None, concurrent_pipelines = None, node_selector = None, measure_energy = False):
-        self.run_pipelines(X,y,"fit(X,y)", "fit", resources = resources, concurrent_pipelines = concurrent_pipelines, fitData=True, node_selector=node_selector, return_output=False, measure_energy = measure_energy)
+
+    def get_models(self):
+        output = []
+
+        for pipeline in self.pipelines:
+            output.append(self.download_variable("pipe", prefix = pipeline["id"]))
+
+        return output
+  
+
+    def fit(self,X,y, resources = None, concurrent_pipelines = None, node_selector = None, measure_energy = False, **kwargs):
+        self.run_pipelines(X,y,"fit(X,y,**add_args)", "fit", resources = resources, concurrent_pipelines = concurrent_pipelines, fitData=True, node_selector=node_selector, return_output=False, measure_energy = measure_energy, additional_args = kwargs)
 
         self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
 
