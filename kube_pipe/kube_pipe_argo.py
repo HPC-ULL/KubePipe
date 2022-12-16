@@ -65,6 +65,7 @@ class KubePipeArgo(KubePipeBase):
             secure=not artifactsConfig["insecure"]
         )
 
+        self.node_selector = None
         self.bucket = artifactsConfig["bucket"]
 
         if not self.minioclient.bucket_exists(self.bucket):
@@ -78,7 +79,7 @@ class KubePipeArgo(KubePipeBase):
 
     def upload_variable(self, var, name, prefix = ""):
         with open(f'{self.tmpFolder}/{name}.tmp', 'wb') as handle:
-            pickle.dump(var, handle, protocol=pickle.HIGHEST_PROTOCOL, byref=False)
+            pickle.dump(var, handle, byref=False)
 
         if(prefix!= ""):
             prefix +="/"
@@ -89,21 +90,29 @@ class KubePipeArgo(KubePipeBase):
         os.remove(f'{self.tmpFolder}/{name}.tmp')
 
 
-    def download_variable(self,name, prefix = ""):
-        if(prefix!= ""):
+    def download_variable(self,name, prefix = "", delete = False):
+        if(prefix!= "" and prefix[-1] != "/"):
             prefix +="/"
 
         self.minioclient.fget_object(self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}", f"{self.tmpFolder}/{name}.tmp")
 
-        with open(f"{self.tmpFolder}/{name}.tmp","rb") as outfile:
-            var = pickle.load(outfile)
+        try:
+            with open(f"{self.tmpFolder}/{name}.tmp","rb") as outfile:
+                var = pickle.load(outfile)
+        except Exception as e:
+            from tensorflow.keras.models import load_model
+            var = load_model(f"{self.tmpFolder}/{name}.tmp",compile=False)
 
         os.remove(f"{self.tmpFolder}/{name}.tmp")
+
+        if(delete):
+            self.minioclient.remove_object(self.bucket, self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}")
+
 
         return var
 
 
-    def workflow(self,X,y,funcs,name, pipeId, resources = None, fitdata = True, operation= "fit(X,y)", measure_energy = False, node_selector = None):
+    def workflow(self,X,y,funcs,name, pipeId, resources = None, fitdata = True, operation= "fit(X,y)", measure_energy = False, node_selector = None, additional_args = None):
 
 
         if(node_selector == None):
@@ -139,10 +148,18 @@ class KubePipeArgo(KubePipeBase):
         templates[0]["steps"] = []
 
         for i,func in enumerate(funcs):
+            func_name = func.__name__.lower()
+            func_add_args = {}
+            for key, arg in additional_args.items():
+                split = key.split("__")
+                if(len(split)>1):
+                    key, arg_name = split[0], split[1]
+                    if(key == func_name):
+                        func_add_args[arg_name] = arg
             
+            print(func_name, func_add_args.keys())
             code = f"""
 import dill as pickle
-
 
 def work():
     with open(\'/tmp/X\', \'rb\') as input_file:
@@ -157,42 +174,54 @@ def work():
         func = pickle.load(input_file)
         print("Loaded func")
 
+    if({bool(func_add_args)}):
+        with open(\'/tmp/add_args\', \'rb\') as input_file:
+            add_args= pickle.load(input_file)
+            print("Loaded add_args")
+    else:
+        add_args = dict()
+
+
     print("Loaded files")
 
     if(hasattr(func,"predict")):
-        model = func.{operation}
-        with open('/tmp/out', \'wb\') as handle:
-            pickle.dump(model, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        output = func.{operation}
+
+        from scikeras.wrappers import BaseWrapper
+        if(isinstance(output,BaseWrapper)):
+            output.model_.save('/tmp/out',save_format="h5")
+        else:
+            with open('/tmp/out', \'wb\') as handle:
+                pickle.dump(output, handle)
 
     else:
         if({fitdata}):
             func=func.fit(X)
             with open('/tmp/func', \'wb\') as handle:
-                pickle.dump(func, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(func, handle)
         
         X = func.transform(X)
 
         with open('/tmp/X', \'wb\') as handle:
-            pickle.dump(X, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(X, handle)
 
 if({measure_energy}):
     import pyemlWrapper
 
     energy = pyemlWrapper.measure_function(work)[1]
     with open('/tmp/energy', \'wb\') as handle:
-        pickle.dump(energy, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(energy, handle)
 
 else:
     work()
 """    
-
 
             template = {
 
                         'container': 
                             {'args': [''],
                             'command': ['python', '-c'],
-                            'image': 'alu0101040882/kubepipe:3.9.13-alpine',
+                            'image': 'alu0101040882/kubepipe:p3.9.12-tensorflow',
                             },
                         'inputs' : {
                             'artifacts':
@@ -207,6 +236,12 @@ else:
                                []
                         },
                         'name': str(i) + str.lower(str(type(func).__name__))}
+
+            if(func_add_args):
+                template["inputs"]["artifacts"].append({"name" : f"add_args{i}{pipeId}", "path" : "/tmp/add_args", "archive" : {"none" : {}}, "s3": { "key" : f"{self.minio_bucket_path}/{self.id}/tmp/add_args{id(func)}{pipeId}"}})
+                self.upload_variable(func_add_args,f"add_args{id(func)}{pipeId}", prefix = "tmp")
+
+
 
             print("Node selector", node_selector)
             if(node_selector is not None):
@@ -274,7 +309,7 @@ else:
         print(f"Artifacts deleted from {prefix}")
 
 
-    def run_workflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None, return_output = True, measure_energy = False):
+    def run_workflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None, return_output = True, measure_energy = False,additional_args = None, node_selector = None):
 
         if pipeIndex == None:
             pipeIndex = range(len(self.pipelines))
@@ -308,7 +343,7 @@ else:
             if applyToFuncs is not None and callable(applyToFuncs):
                 funcs = applyToFuncs(funcs)
 
-            workflows.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation, measure_energy = measure_energy))
+            workflows.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation, measure_energy = measure_energy, additional_args = additional_args, node_selector = node_selector))
         
         if(len(workflows) > 0):
             self.wait_for_workflows(workflows)
@@ -337,6 +372,15 @@ else:
 
             return outputs
 
+    def get_models(self):
+        output = []
+
+        for pipeline in self.pipelines:
+            output.append(self.download_variable(f"model{pipeline['id']}" ))
+
+        return output
+  
+
     def get_consumed(self):
         if(self.energy is None):
             raise ValueError("Energy must be measured with 'measure_energy = True' before getting it")
@@ -358,8 +402,8 @@ else:
                     
         return total_consumed
 
-    def fit(self,X,y, resources = None, concurrent_pipelines = None, measure_energy = False):
-        self.run_workflows(X,y,"fit(X,y)", "fit", True, resources = resources, concurrent_pipelines = concurrent_pipelines, return_output = False, measure_energy = measure_energy)
+    def fit(self,X,y, resources = None, concurrent_pipelines = None, measure_energy = False, node_selector = None, **kwargs):
+        self.run_workflows(X,y,"fit(X,y,**add_args)", "fit", True, resources = resources, concurrent_pipelines = concurrent_pipelines, return_output = False, measure_energy = measure_energy, additional_args = kwargs, node_selector = node_selector)
         self.fitted = True
         self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
 

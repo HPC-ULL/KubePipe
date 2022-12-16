@@ -61,8 +61,8 @@ class KubePipeKubernetes(KubePipeBase):
 
         self.node_selector = None
 
-        if not self.minioclient.bucket_exists(self.bucket):
-            self.minioclient.make_bucket(self.bucket)
+        # if not self.minioclient.bucket_exists(self.bucket):
+        #     self.minioclient.make_bucket(self.bucket)
 
 
 
@@ -91,13 +91,17 @@ class KubePipeKubernetes(KubePipeBase):
 
     def download_variable(self,name, prefix = "", delete = False):
 
-        if(prefix!= ""):
+        if(prefix!= "" and prefix[-1] != "/"):
             prefix +="/"
 
         self.minioclient.fget_object(self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}", f"{self.tmpFolder}/{name}.tmp")
 
-        with open(f"{self.tmpFolder}/{name}.tmp","rb") as outfile:
-            var = pickle.load(outfile)
+        try:
+            with open(f"{self.tmpFolder}/{name}.tmp","rb") as outfile:
+                var = pickle.load(outfile)
+        except Exception as e:
+            from tensorflow.keras.models import load_model
+            var = load_model(f"{self.tmpFolder}/{name}.tmp",compile=False)
 
         os.remove(f"{self.tmpFolder}/{name}.tmp")
 
@@ -163,7 +167,6 @@ def work():
     else:
         add_args = dict()
 
-
     if({fitData}):
         minioclient.fget_object('{self.bucket}', '{self.minio_bucket_path}/{self.id}/tmp/funcs{pipeId}', '/tmp/funcs')
         with open(\'/tmp/funcs\', \'rb\') as input_file:
@@ -182,8 +185,13 @@ def work():
 
     output = pipe.{operation}
 
-    with open('/tmp/out', \'wb\') as handle:
-        pickle.dump(output, handle)
+    from scikeras.wrappers import BaseWrapper
+    if(isinstance(output[-1],BaseWrapper)):
+        output = output[-1].model_
+        output.save('/tmp/out',save_format="h5")
+    else:
+        with open('/tmp/out', \'wb\') as handle:
+            pickle.dump(output, handle)
 
 
     minioclient.fput_object(
@@ -301,6 +309,8 @@ else:
 
             return outputs
 
+        return self
+
     
     def get_consumed(self):
         if(self.energy is None):
@@ -325,16 +335,11 @@ else:
 
 
     def get_models(self):
-        output = []
-
-        for pipeline in self.pipelines:
-            output.append(self.download_variable("pipe", prefix = pipeline["id"]))
-
-        return output
+        return self.models
   
 
     def fit(self,X,y, resources = None, concurrent_pipelines = None, node_selector = None, measure_energy = False, **kwargs):
-        self.run_pipelines(X,y,"fit(X,y,**add_args)", "fit", resources = resources, concurrent_pipelines = concurrent_pipelines, fitData=True, node_selector=node_selector, return_output=False, measure_energy = measure_energy, additional_args = kwargs)
+        self.models =  self.run_pipelines(X,y,"fit(X,y,**add_args)", "fit", resources = resources, concurrent_pipelines = concurrent_pipelines, fitData=True, node_selector=node_selector, return_output=True, measure_energy = measure_energy, additional_args = kwargs)
 
         self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
 
@@ -358,8 +363,6 @@ else:
         return out
 
     def transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-
-
 
         out =  self.run_pipelines(X, None, "transform(X)", "transform" , resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X",concurrent_pipelines = concurrent_pipelines)
 
