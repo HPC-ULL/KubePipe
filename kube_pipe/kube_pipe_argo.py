@@ -8,18 +8,17 @@ from argo_workflows.api import workflow_service_api
 from argo_workflows.model.io_argoproj_workflow_v1alpha1_workflow_create_request import \
     IoArgoprojWorkflowV1alpha1WorkflowCreateRequest
 
-import uuid
+from pathlib import Path
 
 from minio import Minio
 
-from kubernetes import client, config
 import base64
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 import uuid
-import atexit
+
 
 import datetime
 from dateutil.tz import tzutc
@@ -31,21 +30,20 @@ from .kube_pipe_base import KubePipeBase
 
 class KubePipeArgo(KubePipeBase):
 
-    def __init__(self,*args, argo_ip = None, minio_ip = None, access_key = None, secret_key = None, minio_bucket_path = ".kubetmp", tmpFolder ="/tmp", namespace = "argo"):
+    def __init__(self,*args, argo_ip = None, minio_ip = None, access_key = None, secret_key = None, registry_ip = None, minio_bucket_path = ".kubetmp", tmpFolder ="/tmp", namespace = "argo", use_gpu = False,images = None):
 
-        super().__init__(*args)
+        super().__init__(*args, images = images, registry_ip = registry_ip, use_gpu = False)
         self.tmpFolder = tmpFolder
         self.namespace = namespace
+
+        Path(tmpFolder).mkdir(parents=True, exist_ok=True)
 
         self.minio_bucket_path = minio_bucket_path
 
         self.function_resources = {}
 
-        config.load_kube_config()
-        kubeapi = client.CoreV1Api()
-
-        if not argo_ip: argo_ip = "https://" + kubeapi.read_namespaced_service("argo-server","argo").status.load_balancer.ingress[0].ip + ":2746"
-        if not minio_ip: minio_ip  = kubeapi.read_namespaced_service("minio","argo").status.load_balancer.ingress[0].ip + ":9000"
+        if not argo_ip: argo_ip = "https://" + self.kubeapi.read_namespaced_service("argo-server","argo").status.load_balancer.ingress[0].ip + ":2746"
+        if not minio_ip: minio_ip  = self.kubeapi.read_namespaced_service("minio","argo").status.load_balancer.ingress[0].ip + ":9000"
 
         configuration = argo_workflows.Configuration(host=argo_ip, discard_unknown_keys=True)
         configuration.verify_ssl = False
@@ -53,10 +51,10 @@ class KubePipeArgo(KubePipeBase):
         api_client = argo_workflows.ApiClient(configuration)
         self.api = workflow_service_api.WorkflowServiceApi(api_client)
 
-        artifactsConfig = yaml.safe_load(kubeapi.read_namespaced_config_map("artifact-repositories","argo").data["default-v1"])["s3"]
+        artifactsConfig = yaml.safe_load(self.kubeapi.read_namespaced_config_map("artifact-repositories","argo").data["default-v1"])["s3"]
 
-        if not access_key: access_key = base64.b64decode(kubeapi.read_namespaced_secret(artifactsConfig["accessKeySecret"]["name"], "argo").data[artifactsConfig["accessKeySecret"]["key"]]).decode("utf-8")
-        if not secret_key: secret_key = base64.b64decode(kubeapi.read_namespaced_secret(artifactsConfig["secretKeySecret"]["name"], "argo").data[artifactsConfig["secretKeySecret"]["key"]]).decode("utf-8")
+        if not access_key: access_key = base64.b64decode(self.kubeapi.read_namespaced_secret(artifactsConfig["accessKeySecret"]["name"], "argo").data[artifactsConfig["accessKeySecret"]["key"]]).decode("utf-8")
+        if not secret_key: secret_key = base64.b64decode(self.kubeapi.read_namespaced_secret(artifactsConfig["secretKeySecret"]["name"], "argo").data[artifactsConfig["secretKeySecret"]["key"]]).decode("utf-8")
 
         self.minioclient = Minio(
             minio_ip,
@@ -112,7 +110,7 @@ class KubePipeArgo(KubePipeBase):
         return var
 
 
-    def workflow(self,X,y,funcs,name, pipeId, resources = None, fitdata = True, operation= "fit(X,y)", measure_energy = False, node_selector = None, additional_args = None):
+    def workflow(self,X,y,funcs,name, pipeId, resources = None, fitdata = True, operation= "fit(X,y)", measure_energy = False, node_selector = None, additional_args = None, image = "python"):
 
 
         if(node_selector == None):
@@ -148,7 +146,7 @@ class KubePipeArgo(KubePipeBase):
         templates[0]["steps"] = []
 
         for i,func in enumerate(funcs):
-            func_name = func.__name__.lower()
+            func_name = str(type(func).__name__).lower()
             func_add_args = {}
             for key, arg in additional_args.items():
                 split = key.split("__")
@@ -157,9 +155,9 @@ class KubePipeArgo(KubePipeBase):
                     if(key == func_name):
                         func_add_args[arg_name] = arg
             
-            print(func_name, func_add_args.keys())
             code = f"""
 import dill as pickle
+import sys
 
 def work():
     with open(\'/tmp/X\', \'rb\') as input_file:
@@ -186,11 +184,14 @@ def work():
 
     if(hasattr(func,"predict")):
         output = func.{operation}
-
-        from scikeras.wrappers import BaseWrapper
-        if(isinstance(output,BaseWrapper)):
-            output.model_.save('/tmp/out',save_format="h5")
-        else:
+        try:
+            from scikeras.wrappers import BaseWrapper
+            if(isinstance(output,BaseWrapper)):
+                output.model_.save('/tmp/out',save_format="h5")
+            else:
+                with open('/tmp/out', \'wb\') as handle:
+                    pickle.dump(output, handle)
+        except ModuleNotFoundError:
             with open('/tmp/out', \'wb\') as handle:
                 pickle.dump(output, handle)
 
@@ -206,9 +207,9 @@ def work():
             pickle.dump(X, handle)
 
 if({measure_energy}):
-    import pyemlWrapper
+    from pyeml import measure_function
+    energy = measure_function(work)[1]
 
-    energy = pyemlWrapper.measure_function(work)[1]
     with open('/tmp/energy', \'wb\') as handle:
         pickle.dump(energy, handle)
 
@@ -221,7 +222,7 @@ else:
                         'container': 
                             {'args': [''],
                             'command': ['python', '-c'],
-                            'image': 'alu0101040882/kubepipe:p3.9.12-tensorflow',
+                            'image': image,
                             },
                         'inputs' : {
                             'artifacts':
@@ -243,7 +244,6 @@ else:
 
 
 
-            print("Node selector", node_selector)
             if(node_selector is not None):
                 template["nodeSelector"] = node_selector
             
@@ -343,7 +343,7 @@ else:
             if applyToFuncs is not None and callable(applyToFuncs):
                 funcs = applyToFuncs(funcs)
 
-            workflows.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation, measure_energy = measure_energy, additional_args = additional_args, node_selector = node_selector))
+            workflows.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation, measure_energy = measure_energy, additional_args = additional_args, node_selector = node_selector, image=pipeline["image"]))
         
         if(len(workflows) > 0):
             self.wait_for_workflows(workflows)
@@ -354,13 +354,11 @@ else:
                 energy.append({})
                 for j, func in enumerate(self.pipelines[index]):
                     func_energy = self.download_variable(f"energy{j}{self.pipelines[index]['id']}", prefix = "tmp")
-                    print("Func energy", func_energy)
                     if(j == 0):
                         energy[-1] = func_energy
                     else:
                         for device, consumed in func_energy.items():
-                            energy[-1][device]["consumed"] += consumed["consumed"]
-                            energy[-1][device]["elapsed"] += consumed["elapsed"]
+                            energy[-1][device] += consumed
 
             self.energy =  energy
 
@@ -381,26 +379,6 @@ else:
         return output
   
 
-    def get_consumed(self):
-        if(self.energy is None):
-            raise ValueError("Energy must be measured with 'measure_energy = True' before getting it")
-            
-        return self.energy
-
-    def get_total_consumed(self):
-        consumed = self.get_consumed()
-        total_consumed = {}
-        for pipe_consumed in consumed:
-            for device, consumed in pipe_consumed.items():
-                if(device not in total_consumed):
-                    total_consumed[device] = {}
-                    total_consumed[device]["consumed"] = consumed["consumed"]
-                    total_consumed[device]["elapsed"] = consumed["elapsed"]
-                else:
-                    total_consumed[device]["consumed"] += consumed["consumed"]
-                    total_consumed[device]["elapsed"] += consumed["elapsed"]
-                    
-        return total_consumed
 
     def fit(self,X,y, resources = None, concurrent_pipelines = None, measure_energy = False, node_selector = None, **kwargs):
         self.run_workflows(X,y,"fit(X,y,**add_args)", "fit", True, resources = resources, concurrent_pipelines = concurrent_pipelines, return_output = False, measure_energy = measure_energy, additional_args = kwargs, node_selector = node_selector)
@@ -566,8 +544,8 @@ else:
                                 raise Exception(f"Workflow {workflowName} has failed")
 
             if(len(finished) < numberToWait):
-                sleep(1)
-                print(".",end="",sep="",flush=True)
+                sleep(0.1)
+                #print(".",end="",sep="",flush=True)
 
         return finished
 
