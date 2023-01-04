@@ -36,6 +36,8 @@ class KubePipeArgo(KubePipeBase):
         self.tmpFolder = tmpFolder
         self.namespace = namespace
 
+        self.backend = "argo"
+
         Path(tmpFolder).mkdir(parents=True, exist_ok=True)
 
         self.minio_bucket_path = minio_bucket_path
@@ -75,43 +77,8 @@ class KubePipeArgo(KubePipeBase):
         self.delete_files(f"{self.minio_bucket_path}/{self.id}/")
 
 
-    def upload_variable(self, var, name, prefix = ""):
-        with open(f'{self.tmpFolder}/{name}.tmp', 'wb') as handle:
-            pickle.dump(var, handle, byref=False)
 
-        if(prefix!= ""):
-            prefix +="/"
-
-        up = self.minioclient.fput_object(
-            self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}", f'{self.tmpFolder}/{name}.tmp',
-        )
-        os.remove(f'{self.tmpFolder}/{name}.tmp')
-
-
-    def download_variable(self,name, prefix = "", delete = False):
-        if(prefix!= "" and prefix[-1] != "/"):
-            prefix +="/"
-
-        self.minioclient.fget_object(self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}", f"{self.tmpFolder}/{name}.tmp")
-
-        try:
-            with open(f"{self.tmpFolder}/{name}.tmp","rb") as outfile:
-                var = pickle.load(outfile)
-        except Exception as e:
-            from tensorflow.keras.models import load_model
-            var = load_model(f"{self.tmpFolder}/{name}.tmp",compile=False)
-
-        os.remove(f"{self.tmpFolder}/{name}.tmp")
-
-        if(delete):
-            self.minioclient.remove_object(self.bucket, self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}")
-
-
-        return var
-
-
-    def workflow(self,X,y,funcs,name, pipeId, resources = None, fitdata = True, operation= "fit(X,y)", measure_energy = False, node_selector = None, additional_args = None, image = "python"):
-
+    def workflow(self,funcs,name, pipeId, resources = None, fit_data = True, operation= "fit(X,y)", measure_energy = False, node_selector = None, additional_args = None, image = "python"):
 
         if(node_selector == None):
             node_selector = self.node_selector
@@ -126,7 +93,6 @@ class KubePipeArgo(KubePipeBase):
                             'ttlStrategy': {
                                             'secondsAfterSuccess': 20},
                                             
-                  
                                 }}
 
 
@@ -139,13 +105,12 @@ class KubePipeArgo(KubePipeBase):
                             ] 
                 
 
-
         templates = workflow["spec"]["templates"]
         workflow["metadata"]["generateName"] = name+str(pipeId)
 
         templates[0]["steps"] = []
 
-        for i,func in enumerate(funcs):
+        for i , func in enumerate(funcs):
             func_name = str(type(func).__name__).lower()
             func_add_args = {}
             for key, arg in additional_args.items():
@@ -196,7 +161,7 @@ def work():
                 pickle.dump(output, handle)
 
     else:
-        if({fitdata}):
+        if({fit_data}):
             func=func.fit(X)
             with open('/tmp/func', \'wb\') as handle:
                 pickle.dump(func, handle)
@@ -229,7 +194,7 @@ else:
                                [
                                     {"name" : f"inX{pipeId}", "path" :  "/tmp/X",    "s3":    { "key" : f"{self.minio_bucket_path}/{self.id}/tmp/X{pipeId}" if i >= 1 else f"{self.minio_bucket_path}/{self.id}/tmp/X" }} ,
                                     {"name" : f"iny{pipeId}", "path" :  "/tmp/y",    "s3":    {  "key" : f"{self.minio_bucket_path}/{self.id}/tmp/y" }},
-                                    {"name" : f"infunc{i}{pipeId}", "path" : "/tmp/func", "s3": { "key" : f"{self.minio_bucket_path}/{self.id}/func{id(func)}{pipeId}" if fitdata or not (hasattr(func,"predict")) else f"{self.minio_bucket_path}/{self.id}/model{pipeId}" }}
+                                    {"name" : f"infunc{i}{pipeId}", "path" : "/tmp/func", "s3": { "key" : f"{self.minio_bucket_path}/{self.id}/func{id(func)}{pipeId}" if fit_data or not (hasattr(func,"predict")) else f"{self.minio_bucket_path}/{self.id}/model{pipeId}" }}
                                ]
                         },
                         'outputs' : {
@@ -257,24 +222,25 @@ else:
                     "privileged" : True
                 }
 
+                print("output key",  f"{self.minio_bucket_path}/{self.id}/tmp/energy{i}{pipeId}")
                 template["outputs"]["artifacts"].append({"name" : f"energy{i}{pipeId}", "path" : "/tmp/energy", "archive" : {"none" : {}}, "s3": { "key" : f"{self.minio_bucket_path}/{self.id}/tmp/energy{i}{pipeId}"}})
 
 
-            if(fitdata):
+            if(fit_data):
                 self.upload_variable(func,f"func{id(func)}{pipeId}")
 
             #Estimator
             if(hasattr(func,"predict")):
                 template["outputs"]["artifacts"].append({"name" : f"output{pipeId}", "path" : "/tmp/out", "archive" : {"none" : {}}, "s3": { "key" : f"{self.minio_bucket_path}/{self.id}/tmp/output{pipeId}"}})
 
-                if(fitdata):
+                if(fit_data):
                     template["outputs"]["artifacts"].append({"name" : f"model{pipeId}", "path" : "/tmp/out", "archive" : {"none" : {}}, "s3": { "key" : f"{self.minio_bucket_path}/{self.id}/model{pipeId}"}})
                 
             #Transformer
             else:
                 template["outputs"]["artifacts"].append({"name" : f"outX{pipeId}", "path" : "/tmp/X", "archive" : {"none" : {}}, "s3": { "key" : f"{self.minio_bucket_path}/{self.id}/tmp/X{pipeId}"}})
 
-                if(fitdata):
+                if(fit_data):
                     template["outputs"]["artifacts"].append({"name" : f"outfunc{i}{pipeId}", "path" : "/tmp/func", "archive" : {"none" : {}}, "s3": { "key" : f"{self.minio_bucket_path}/{self.id}/func{id(func)}{pipeId}"}})
             
             
@@ -298,8 +264,14 @@ else:
 
             templates[0]["steps"].append(step)
 
-   
-        return self.launch_from_manifest(workflow)
+            api_response = self.api.create_workflow(
+                namespace=self.namespace,
+                body=IoArgoprojWorkflowV1alpha1WorkflowCreateRequest(workflow=workflow, _check_type=False
+            ))
+
+            name = api_response["metadata"]["name"]
+
+        return name
 
 
     def delete_files(self, prefix):
@@ -308,67 +280,6 @@ else:
             self.minioclient.remove_object(self.bucket, obj.object_name)
         print(f"Artifacts deleted from {prefix}")
 
-
-    def run_workflows(self, X, y, operation, name,  fitdata, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None, return_output = True, measure_energy = False,additional_args = None, node_selector = None):
-
-        if pipeIndex == None:
-            pipeIndex = range(len(self.pipelines))
-
-        
-        if concurrent_pipelines == None:
-            if(self.concurrent_pipelines != None):
-                concurrent_pipelines = self.concurrent_pipelines
-            else:
-                concurrent_pipelines = len(self.pipelines)
-
-        workflows = []
-
-
-        self.upload_variable(X,f"X", prefix = "tmp")
-        self.upload_variable(y,f"y", prefix = "tmp")
-
-
-        for i , index in enumerate(pipeIndex):
-
-            #Check that no more than "concurrent_pipelines" are running at the same time, wait for a workflow to finish
-            if(len(workflows) >= concurrent_pipelines):
-                finishedWorkflows = self.wait_for_workflows(workflows,numberToWait=1)
-                for workflow in finishedWorkflows:
-                    workflows.remove(workflow)
-        
-            pipeline = self.pipelines[index]
-
-            funcs = pipeline["funcs"]
-
-            if applyToFuncs is not None and callable(applyToFuncs):
-                funcs = applyToFuncs(funcs)
-
-            workflows.append(self.workflow(X,y, funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"], resources = resources, fitdata=fitdata, operation = operation, measure_energy = measure_energy, additional_args = additional_args, node_selector = node_selector, image=pipeline["image"]))
-        
-        if(len(workflows) > 0):
-            self.wait_for_workflows(workflows)
-
-        if(measure_energy):
-            energy = []
-            for i, index in enumerate(pipeIndex):
-                energy.append({})
-                for j, func in enumerate(self.pipelines[index]):
-                    func_energy = self.download_variable(f"energy{j}{self.pipelines[index]['id']}", prefix = "tmp")
-                    if(j == 0):
-                        energy[-1] = func_energy
-                    else:
-                        for device, consumed in func_energy.items():
-                            energy[-1][device] += consumed
-
-            self.energy =  energy
-
-        if(return_output):
-            outputs = []
-
-            for i, index in enumerate(pipeIndex):
-                outputs.append(self.download_variable(f"{output}{self.pipelines[index]['id']}", prefix = outputPrefix))
-
-            return outputs
 
     def get_models(self):
         output = []
@@ -380,108 +291,6 @@ else:
   
 
 
-    def fit(self,X,y, resources = None, concurrent_pipelines = None, measure_energy = False, node_selector = None, **kwargs):
-        self.run_workflows(X,y,"fit(X,y,**add_args)", "fit", True, resources = resources, concurrent_pipelines = concurrent_pipelines, return_output = False, measure_energy = measure_energy, additional_args = kwargs, node_selector = node_selector)
-        self.fitted = True
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return self
-        
-    def score(self,X,y, resources = None, pipeIndex = None, concurrent_pipelines = None):
-
-        if self.pipelines == None or not self.fitted:
-            raise Exception("Model must be trained before calculating score")
-
-        out =  self.run_workflows(X,y,"score(X,y)", "score",  False,  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def score_samples(self,X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-
-        if self.pipelines == None or not self.fitted:
-            raise Exception("Model must be trained before calculating score_samples")
-
-        out =  self.run_workflows(X,None,"score_samples(X)", "score_samples",  False,  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-
-        if self.pipelines == None or not self.fitted:
-            raise Exception("Transformer must be fitted before transform")
-
-        out =  self.run_workflows(X, None, "transform(X)", "transform" ,False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X",concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    
-    def inverse_transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-
-        if self.pipelines == None or not self.fitted:
-            raise Exception("Transformer must be fitted before inverse_transform")
-
-        out =  self.run_workflows(X, None, "transform(X)", "inverse_transform" ,False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1][::-1], output = "X",concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-
-    def predict_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        if self.pipelines == None or not self.fitted:
-            raise Exception("Model must be trained before calculating predict_proba")
-
-        out =  self.run_workflows(X, None, "predict_proba(X)", "predict_proba", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def predict_log_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        if self.pipelines == None or not self.fitted:
-            raise Exception("Model must be trained before calculating predict_log_proba")
-
-        out =  self.run_workflows(X, None, "predict_log_proba(X)", "predict_log_proba", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def predict(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        if self.pipelines == None or not self.fitted:
-            raise Exception("Model must be trained before calculating predict")
-
-        out =  self.run_workflows(X, None, "predict(X)", "predict", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def decision_function(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        if self.pipelines == None or not self.fitted:
-            raise Exception("Model must be trained before calculating predict")
-
-        out =  self.run_workflows(X, None, "decision_function(X)", "decision_function", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-        
-    def fit_predict(self, X, y, resources = None, pipeIndex = None, concurrent_pipelines = None):
-
-        out = self.run_workflows(X, y, "fit_predict(X,y)", "fit_predict", True, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
-
-        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-
     def config(self, resources = None, function_resources = None, concurrent_pipelines = None, namespace = None, tmpFolder = None,node_selector = None):
         if node_selector: self.node_selector = node_selector
         if namespace: self.namespace = namespace
@@ -491,100 +300,42 @@ else:
         if concurrent_pipelines: self.concurrent_pipelines = concurrent_pipelines
 
 
-    def launch_from_manifest(self,manifest):
-        api_response = self.api.create_workflow(
-            namespace=self.namespace,
-            body=IoArgoprojWorkflowV1alpha1WorkflowCreateRequest(workflow=manifest, _check_type=False
-            ))
+    def get_energy(self,pipeIndex):
+        energy = []
 
-        name = api_response["metadata"]["name"]
-
-        
-        print(f"Launched workflow '{name}'")
-        return name
-
-
-    def wait_for_workflows(self,workflowNames, numberToWait = None):
-
-        if(numberToWait == None):
-            numberToWait = len(workflowNames)    
-        
-        finished = []
-
-        while len(finished) < numberToWait:
-
-            for workflowName in workflowNames:
-                if(workflowName not in finished):
-                    workflow = None
-
-                    try:
-                    
-                        workflow = self.api.get_workflow(namespace=self.namespace,name = workflowName)
-
-                    except NotFoundException:
-                        finished.append(workflowName)
-                        print(f"\nWorkflow '{workflowName}' has been deleted.")
-                    
-                    if(workflow is not None):
-                        status = workflow["status"]
-                    
-                        if(getattr(status,"phase",None) is not None):
-
-                            if(status["phase"] == "Succeeded"):
-                                endtime = datetime.datetime.now(tzutc())
-                                starttime = workflow["metadata"]["creation_timestamp"]
-
-                                print(f"\nWorkflow '{workflowName}' has finished. Time ({endtime-starttime})"u'\u2713')
-                                #self.deleteFiles(workflowName)
-                                
-                                finished.append(workflowName)
-
-                            elif(status["phase"] == "Failed"):
-                                self.delete_files(f"{self.minio_bucket_path}/{self.id}/")
-                                raise Exception(f"Workflow {workflowName} has failed")
-
-            if(len(finished) < numberToWait):
-                sleep(0.1)
-                #print(".",end="",sep="",flush=True)
-
-        return finished
+        for i, index in enumerate(pipeIndex):
+            energy.append({})
+            for j, func in enumerate(self.pipelines[index]["funcs"]):
+                func_energy = self.download_variable(f"energy{j}{self.pipelines[index]['id']}", prefix = "tmp")
+                if(j == 0):
+                    energy[-1] = func_energy
+                else:
+                    for device, consumed in func_energy.items():
+                        energy[-1][device] += consumed
+        return energy
 
 
-    def get_workflow_status(self, workflowName):
+
+    def is_workflow_finished(self, workflow_name):
+
         try:
-            workflow = self.api.get_workflow(namespace=self.namespace,name = workflowName)
-            return workflow["status"]
+            workflow = self.api.get_workflow(namespace=self.namespace,name = workflow_name)
 
         except NotFoundException:
-            return None
-
-
-    def wait_for_workflow(self,workflowName):
-
-        while True:
-            workflow = self.api.get_workflow(namespace=self.namespace,name = workflowName)
+                print(f"\nWorkflow '{workflow_name}' has been deleted.")
+                return True
+            
+        if(workflow is not None):
             status = workflow["status"]
         
             if(getattr(status,"phase",None) is not None):
 
-                if(status["phase"] == "Running"):
-                    sleep(1)
-
-                elif(status["phase"] == "Succeeded"):
- 
-                    endtime = datetime.datetime.now(tzutc())
-                    starttime = workflow["metadata"]["creation_timestamp"]
-
-                    print(f"\nWorkflow '{workflowName}' has finished. Time ({endtime-starttime})"u'\u2713')
-                    return
+                if(status["phase"] == "Succeeded"):
+                    return True
 
                 elif(status["phase"] == "Failed"):
-                    raise Exception(f"Workflow {workflowName} has failed")
+                    self.delete_files(f"{self.minio_bucket_path}/{self.id}/")
+                    raise Exception(f"Workflow {workflow_name} has failed")
+        return False
 
-
-            print(".",end="",sep="",flush=True)
-
-
-
-
-        
+    

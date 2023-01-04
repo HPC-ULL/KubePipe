@@ -13,9 +13,13 @@ from dill.detect import getmodule
 
 import requests
 
+import os
+
 class KubePipeBase(ABC):
 
     def __init__(self,*args, images = None, registry_ip = None, use_gpu = False):
+
+        self.pooling_interval = 0.1
 
         self.id = str(uuid.uuid4())[:8]
 
@@ -68,56 +72,19 @@ class KubePipeBase(ABC):
         atexit.register(self.clean_workflows)
 
 
-
     @abstractmethod
     def clean_workflows(self):
         pass
     
-
     @abstractmethod
-    def fit(self,X,y, resources = None, concurrent_pipelines = None):
+    def get_energy(self, pipeIndex):
         pass
     
     @abstractmethod
-    def score(self,X,y, resources = None, pipeIndex = None, concurrent_pipelines = None):
+    def workflow(self):
         pass
 
-    @abstractmethod
-    def score_samples(self,X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        pass
 
-    @abstractmethod
-    def transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        pass
-
-    @abstractmethod
-    def inverse_transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        pass
-
-    @abstractmethod
-    def predict_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        pass
-
-    @abstractmethod
-    def predict_log_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        pass
-    @abstractmethod
-    def predict(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        pass
-
-    @abstractmethod
-    def decision_function(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        pass
-
-    @abstractmethod        
-    def fit_predict(self, X, y, resources = None, pipeIndex = None, concurrent_pipelines = None):
-        pass
-
-    @abstractmethod
-    def config(self, resources = None, function_resources = None, concurrent_pipelines = None, namespace = None, tmpFolder = None):
-        pass
-
-    
     def get_service_ip(self, service_name, namespace):
         ingress = self.kubeapi.read_namespaced_service(
             service_name, namespace).status.load_balancer.ingress[0]
@@ -165,36 +132,37 @@ class KubePipeBase(ABC):
         image_name = f"kubepipe"
         image_tag = f"{python_version()}_{'_'.join(dep + version(dep) for dep in deps)}"
 
-        full_name = f"{self.registry_ip}/{image_name}:{image_tag}"
-
-
-        if (not self.image_exists(self.registry_ip, image_name, image_tag)):
-
-            base_image = ""
+        base_image = ""
             
-            if(self.use_gpu):
-                if("tensorflow" in deps):
-                    base_image=f'tensorflow:{version("tensorflow")}-gpu'
-                    deps.remove("tensorflow")
-                elif("pytorch" in deps):
-                    base_image=f'pytorch:{version("pytorch")}-cuda10.2-cudnn7-devel'
-                    deps.remove("pytorch")
-                else:
-                    base_image=f'python:{python_version()}-slim'
-
+        if(self.use_gpu):
+            if("tensorflow" in deps):
+                base_image=f'tensorflow/tensorflow:{version("tensorflow")}-gpu'
+                deps.remove("tensorflow")
+                image_tag+='-gpu'
+            elif("torch" in deps):
+                base_image=f"""pytorch/pytorch:{version("torch")}-11.3-cudnn8-runtime\nRUN rm /etc/apt/sources.list.d/cuda.list\nRUN rm /etc/apt/sources.list.d/nvidia-ml.list"""
+                deps.remove("torch")
+                image_tag+='-gpu'
             else:
                 base_image=f'python:{python_version()}-slim'
 
+        else:
+            base_image=f'python:{python_version()}-slim'
+
+        full_name = f"{self.registry_ip}/{image_name}:{image_tag}"
+
+        if (not self.image_exists(self.registry_ip, image_name, image_tag)):
+
             dockerfile = f"""
 FROM {base_image}
-RUN apt update && apt install -y  git libconfuse-dev 
+RUN apt update && apt install -y  git libconfuse-dev && rm -rf /var/lib/apt/lists/*
 ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 RUN pip install {" ".join(dep + '=='  + version(dep) for dep in deps)}
 RUN git clone https://github.com/HPC-ULL/Pyeml && pip install -e Pyeml && cp Pyeml/src/pyeml/lib/libeml.so.1.1 /usr/local/lib
 RUN pip install pip install git+https://github.com/HPC-ULL/KubePipe --no-deps
 """
 
-
+            print("Dockerfile:\n",dockerfile)
             config_map_name = "dockerfileconfigmap" + pipeline["id"]
             self.kubeapi.create_namespaced_config_map(
                 body=client.V1ConfigMap(data={"Dockerfile": dockerfile}, metadata=client.V1ObjectMeta(
@@ -294,5 +262,215 @@ RUN pip install pip install git+https://github.com/HPC-ULL/KubePipe --no-deps
 
 
 
+    def upload_variable(self, var, name, prefix = ""):
+        with open(f'{self.tmpFolder}/{name}.tmp', 'wb') as handle:
+            pickle.dump(var, handle, byref=False)
+
+        if(prefix!= ""):
+            prefix +="/"
+
+        up = self.minioclient.fput_object(
+            self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}", f'{self.tmpFolder}/{name}.tmp',
+        )
+        os.remove(f'{self.tmpFolder}/{name}.tmp')
+
+
+    def download_variable(self,name, prefix = "", delete = False):
+        if(prefix!= "" and prefix[-1] != "/"):
+            prefix +="/"
+
+        self.minioclient.fget_object(self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}", f"{self.tmpFolder}/{name}.tmp")
+
+        try:
+            with open(f"{self.tmpFolder}/{name}.tmp","rb") as outfile:
+                var = pickle.load(outfile)
+        except Exception as e:
+            from tensorflow.keras.models import load_model
+            var = load_model(f"{self.tmpFolder}/{name}.tmp",compile=False)
+
+        os.remove(f"{self.tmpFolder}/{name}.tmp")
+
+        if(delete):
+            self.minioclient.remove_object(self.bucket, self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}")
+
+
+        return var
+
+
+    def run_pipelines(self, X, y, operation, name,  fit_data, resources = None, pipeIndex = None, applyToFuncs = None, output = "output", outputPrefix = "tmp", concurrent_pipelines = None, return_output = True, measure_energy = False,additional_args = None, node_selector = None):
+
+        if pipeIndex == None:
+            pipeIndex = range(len(self.pipelines))
 
         
+        if concurrent_pipelines == None:
+            if(self.concurrent_pipelines != None):
+                concurrent_pipelines = self.concurrent_pipelines
+            else:
+                concurrent_pipelines = len(self.pipelines)
+
+        workflows = []
+
+
+        self.upload_variable(X,f"X", prefix = "tmp")
+        self.upload_variable(y,f"y", prefix = "tmp")
+
+
+        for i , index in enumerate(pipeIndex):
+
+            #Check that no more than "concurrent_pipelines" are running at the same time, wait for a workflow to finish
+            if(len(workflows) >= concurrent_pipelines):
+                finishedWorkflows = self.wait_for_workflows(workflows,numberToWait=1)
+                for workflow in finishedWorkflows:
+                    workflows.remove(workflow)
+        
+            pipeline = self.pipelines[index]
+
+            funcs = pipeline["funcs"]
+
+            if applyToFuncs is not None and callable(applyToFuncs):
+                funcs = applyToFuncs(funcs)
+
+            workflow_name = self.workflow(funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}", pipeline["id"], resources = resources, fit_data=fit_data, operation = operation, measure_energy = measure_energy, additional_args = additional_args, node_selector = node_selector, image=pipeline["image"])
+            print(f"Launched workflow '{workflow_name}'")
+            workflows.append(workflow_name)
+        
+        if(len(workflows) > 0):
+            self.wait_for_workflows(workflows)
+
+        if(measure_energy):
+            self.energy = self.get_energy(pipeIndex)
+
+
+        if(return_output):
+            outputs = []
+
+            for i, index in enumerate(pipeIndex):
+                outputs.append(self.download_variable(f"{output}{self.pipelines[index]['id']}", prefix = outputPrefix))
+
+            return outputs
+
+
+    def get_models(self):
+        return self.models
+
+
+    def fit(self,X,y, resources = None, concurrent_pipelines = None, measure_energy = False, node_selector = None, **kwargs):
+        self.run_pipelines(X,y,"fit(X,y,**add_args)", "fit", True, resources = resources, concurrent_pipelines = concurrent_pipelines, return_output = False, measure_energy = measure_energy, additional_args = kwargs, node_selector = node_selector)
+        self.fitted = True
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return self
+        
+    def score(self,X,y, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        if self.pipelines == None or not self.fitted:
+            raise Exception("Model must be trained before calculating score")
+
+        out =  self.run_pipelines(X,y,"score(X,y)", "score",  False,  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+
+    def score_samples(self,X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        if self.pipelines == None or not self.fitted:
+            raise Exception("Model must be trained before calculating score_samples")
+
+        out =  self.run_pipelines(X,None,"score_samples(X)", "score_samples",  False,  resources = resources, pipeIndex=pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+
+    def transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        if self.pipelines == None or not self.fitted:
+            raise Exception("Transformer must be fitted before transform")
+
+        out =  self.run_pipelines(X, None, "transform(X)", "transform" ,False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1], output = "X",concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+
+    
+    def inverse_transform(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        if self.pipelines == None or not self.fitted:
+            raise Exception("Transformer must be fitted before inverse_transform")
+
+        out =  self.run_pipelines(X, None, "transform(X)", "inverse_transform" ,False, resources = resources, pipeIndex=pipeIndex, applyToFuncs= lambda f : f[:-1][::-1], output = "X",concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+
+
+    def predict_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+        if self.pipelines == None or not self.fitted:
+            raise Exception("Model must be trained before calculating predict_proba")
+
+        out =  self.run_pipelines(X, None, "predict_proba(X)", "predict_proba", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+
+    def predict_log_proba(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+        if self.pipelines == None or not self.fitted:
+            raise Exception("Model must be trained before calculating predict_log_proba")
+
+        out =  self.run_pipelines(X, None, "predict_log_proba(X)", "predict_log_proba", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+
+    def predict(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+        if self.pipelines == None or not self.fitted:
+            raise Exception("Model must be trained before calculating predict")
+
+        out =  self.run_pipelines(X, None, "predict(X)", "predict", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+
+    def decision_function(self, X, resources = None, pipeIndex = None, concurrent_pipelines = None):
+        if self.pipelines == None or not self.fitted:
+            raise Exception("Model must be trained before calculating predict")
+
+        out =  self.run_pipelines(X, None, "decision_function(X)", "decision_function", False, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+        
+    def fit_predict(self, X, y, resources = None, pipeIndex = None, concurrent_pipelines = None):
+
+        out = self.run_pipelines(X, y, "fit_predict(X,y)", "fit_predict", True, resources = resources, pipeIndex = pipeIndex,concurrent_pipelines = concurrent_pipelines)
+
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/tmp")
+
+        return out
+
+    def wait_for_workflows(self, workflow_names, numberToWait=None):
+
+        if (numberToWait == None):
+            numberToWait = len(workflow_names)
+
+        finished = []
+
+        while len(finished) < numberToWait:
+
+            for workflow_name in workflow_names:
+                if (workflow_name not in finished and self.is_workflow_finished(workflow_name)):
+                    print(f"\nWorkflow '{workflow_name}' has finished.")
+
+                    finished.append(workflow_name)
+
+            sleep(self.pooling_interval)
+
+        return finished

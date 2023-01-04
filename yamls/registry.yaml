@@ -14,12 +14,21 @@ spec:
       labels:
         app: private-repository-k8s
     spec:
+      volumes:
+      - name: registry-vol
+        hostPath:
+          path: '/home/bejeque/dsuarezl/ImagesVolume'
+          type: Directory
+
       containers:
         - image: registry:2.8.1
           name: private-repository-k8s
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
+          volumeMounts:
+          - name: registry-vol
+            mountPath: /var/lib/registry
 
 ---
 apiVersion: v1

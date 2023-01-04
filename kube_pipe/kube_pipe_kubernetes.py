@@ -27,13 +27,14 @@ class KubePipeKubernetes(KubePipeBase):
         self.tmpFolder = tmpFolder
         self.namespace = namespace
 
+        self.backend = "kubernetes"
+
         Path(tmpFolder).mkdir(parents=True, exist_ok=True)
 
         self.minio_bucket_path = minio_bucket_path
 
         if not minio_ip:
             minio_ip = self.get_service_ip("minio", self.namespace) + ":9000"
-
 
 
         artifactsConfig = yaml.safe_load(self.kubeapi.read_namespaced_config_map(
@@ -59,58 +60,23 @@ class KubePipeKubernetes(KubePipeBase):
 
         self.node_selector = None
 
+
         if not self.minioclient.bucket_exists(self.bucket):
             self.minioclient.make_bucket(self.bucket)
 
 
     def clean_workflows(self):
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/")
-
-    def upload_variable(self, var, name, prefix=""):
-
-        # if(isinstance(var,nn.Module)):
-        #     model_scripted = jit.script(var)
-        #     model_scripted.save(f'{self.tmpFolder}/{name}.tmp')
-        # else:
-        with open(f'{self.tmpFolder}/{name}.tmp', 'wb') as handle:
-            pickle.dump(var, handle)
-
-        if (prefix != ""):
-            prefix += "/"
-
-        result = self.minioclient.fput_object(
-            self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}", f'{self.tmpFolder}/{name}.tmp',
-        )
+        self.delete_files(f"{self.minio_bucket_path}/{self.id}/")
 
 
-    
+    def get_energy(self,pipeIndex):
+        energy = []
+        for index in pipeIndex:
+            energy.append(self.download_variable(
+                f"{self.pipelines[index]['id']}-energy", prefix="tmp"))
+        return energy
 
-        os.remove(f'{self.tmpFolder}/{name}.tmp')
-
-    def download_variable(self, name, prefix="", delete=False):
-
-        if (prefix != "" and prefix[-1] != "/"):
-            prefix += "/"
-
-        self.minioclient.fget_object(
-            self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}", f"{self.tmpFolder}/{name}.tmp")
-
-        try:
-            with open(f"{self.tmpFolder}/{name}.tmp", "rb") as outfile:
-                var = pickle.load(outfile)
-        except Exception as e:            
-            from tensorflow.keras.models import load_model
-            var = load_model(f"{self.tmpFolder}/{name}.tmp", compile=False)
-
-        os.remove(f"{self.tmpFolder}/{name}.tmp")
-
-        if (delete):
-            self.minioclient.remove_object(
-                self.bucket, self.bucket, f"{self.minio_bucket_path}/{self.id}/{prefix}{name}")
-
-        return var
-
-    def workflow(self, funcs, name, pipeId, operation="fit(X,y)", fitData=False, resources=None, node_selector=None, measure_energy=False, additional_args=None, image="python"):
+    def workflow(self, funcs, name, pipeId, operation="fit(X,y)", fit_data=False, resources=None, node_selector=None, measure_energy=False, additional_args=None, image="python"):
 
         if (resources == None):
             resources = self.kuberesources
@@ -122,7 +88,6 @@ class KubePipeKubernetes(KubePipeBase):
 
         if (additional_args):
             self.upload_variable(additional_args, f"add_args{pipeId}", "tmp")
-
         code = f"""
 import dill as pickle
 
@@ -144,13 +109,19 @@ minioclient = Minio(
             secure=False
 )
 
-def download_object(name, prefix = ""):
+def download_object(name, prefix = "", retrys = 10):
     print(f"Downloading '{self.minio_bucket_path}/{self.id}{'{prefix}'}{'{name}'}' ")
+    retry = 0
     while True:
         try:
             minioclient.fget_object(f'{self.bucket}', f'{self.minio_bucket_path}/{self.id}{'{prefix}'}{'{name}'}', f'/tmp/{'{name}'}')
             break
         except Exception as e:
+            retry+=1
+            if(retry == retrys):
+                raise ValueError(f"Failed to download {name}")
+                break
+
             print(f"failed to download '{self.minio_bucket_path}/{self.id}{'{prefix}'}{'{name}'}'", e)
             sleep(0.5)
 
@@ -172,7 +143,7 @@ def work():
     else:
         add_args = dict()
 
-    if({fitData}):
+    if({fit_data}):
         funcs = download_object("funcs{pipeId}", prefix = "/tmp/")
         pipe = make_pipeline(*funcs)
     else:
@@ -183,7 +154,7 @@ def work():
     try:
         from scikeras.wrappers import BaseWrapper
 
-        if({fitData} and isinstance(output[-1],BaseWrapper)):
+        if({fit_data} and isinstance(output[-1],BaseWrapper)):
             output = output[-1].model_
             output.save('/tmp/out',save_format="h5")
         else:
@@ -198,7 +169,7 @@ def work():
                 '{self.bucket}', '{self.minio_bucket_path}/{self.id}/tmp/{pipeId}', '/tmp/out',
     )
 
-    if({fitData}):
+    if({fit_data}):
         minioclient.fput_object(
                 '{self.bucket}', '{self.minio_bucket_path}/{self.id}/{pipeId}pipe', '/tmp/out',
         )
@@ -253,159 +224,10 @@ else:
         api_response = self.kubeapi.create_namespaced_pod(
             body=body,
             namespace=self.namespace)
-        print("\nLanzado el pipeline: '" + workflowname + "'")
         return workflowname
 
-    def run_pipelines(self, X, y, operation, name, resources=None, pipeIndex=None, applyToFuncs=None, output="output", outputPrefix="tmp", concurrent_pipelines=None, fitData=False, node_selector=None, return_output=True, measure_energy=False, additional_args=None):
 
-        if pipeIndex == None:
-            pipeIndex = range(len(self.pipelines))
-
-        if concurrent_pipelines == None:
-            if (self.concurrent_pipelines != None):
-                concurrent_pipelines = self.concurrent_pipelines
-            else:
-                concurrent_pipelines = len(self.pipelines)
-
-        workflows = []
-
-        self.upload_variable(X, f"X", prefix="tmp")
-        self.upload_variable(y, f"y", prefix="tmp")
-
-        for i, index in enumerate(pipeIndex):
-
-            # Check that no more than "concurrent_pipelines" are running at the same time, wait for a workflow to finish
-            if (len(workflows) >= concurrent_pipelines):
-                finishedWorkflows = self.wait_for_pipelines(
-                    workflows, numberToWait=1)
-                for workflow in finishedWorkflows:
-                    workflows.remove(workflow)
-
-            pipeline = self.pipelines[index]
-
-            funcs = pipeline["funcs"]
-
-            if applyToFuncs is not None and callable(applyToFuncs):
-                funcs = applyToFuncs(funcs)
-
-            workflows.append(self.workflow(funcs, f"{i}-{str.lower(str(type( pipeline['funcs'][-1] ).__name__))}-{name}-", pipeline["id"],
-                             operation=operation, fitData=fitData, node_selector=node_selector, measure_energy=measure_energy, additional_args=additional_args, image=pipeline["image"]))
-
-        if (len(workflows) > 0):
-            self.wait_for_pipelines(workflows)
-
-        if (measure_energy):
-            self.energy = []
-
-            for index in pipeIndex:
-                self.energy.append(self.download_variable(
-                    f"{self.pipelines[index]['id']}-energy", prefix="tmp"))
-
-        if (return_output):
-            outputs = []
-
-            for index in pipeIndex:
-                outputs.append(self.download_variable(
-                    f"{self.pipelines[index]['id']}", prefix="tmp"))
-
-            return outputs
-
-        return self
-
-
-    def get_models(self):
-        return self.models
-
-    def fit(self, X, y, resources=None, concurrent_pipelines=None, node_selector=None, measure_energy=False, **kwargs):
-        self.models = self.run_pipelines(X, y, "fit(X,y,**add_args)", "fit", resources=resources, concurrent_pipelines=concurrent_pipelines,
-                                         fitData=True, node_selector=node_selector, return_output=True, measure_energy=measure_energy, additional_args=kwargs)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return self
-
-    def score(self, X, y, resources=None, pipeIndex=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, y, "score(X,y)", "score",  resources=resources,
-                                 pipeIndex=pipeIndex, concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def score_samples(self, X, resources=None, pipe_index=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, None, "score_samples(X)", "score_samples",   resources=resources,
-                                 pipeIndex=pipe_index, concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def transform(self, X, resources=None, pipeIndex=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, None, "transform(X)", "transform", resources=resources, pipeIndex=pipeIndex,
-                                 applyToFuncs=lambda f: f[:-1], output="X", concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def inverse_transform(self, X, resources=None, pipeIndex=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, None, "transform(X)", "inverse_transform", resources=resources, pipeIndex=pipeIndex,
-                                 applyToFuncs=lambda f: f[:-1][::-1], output="X", concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def predict_proba(self, X, resources=None, pipeIndex=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, None, "predict_proba(X)", "predict_proba",  resources=resources,
-                                 pipeIndex=pipeIndex, concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def predict_log_proba(self, X, resources=None, pipeIndex=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, None, "predict_log_proba(X)", "predict_log_proba",
-                                 resources=resources, pipeIndex=pipeIndex, concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def predict(self, X, resources=None, pipeIndex=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, None, "predict(X)", "predict",  resources=resources,
-                                 pipeIndex=pipeIndex, concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def decision_function(self, X, resources=None, pipeIndex=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, None, "decision_function(X)", "decision_function",
-                                 resources=resources, pipeIndex=pipeIndex, concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def fit_predict(self, X, y, resources=None, pipeIndex=None, concurrent_pipelines=None):
-
-        out = self.run_pipelines(X, y, "fit_predict(X,y)", "fit_predict",  fitData=True,
-                                 resources=resources, pipeIndex=pipeIndex, concurrent_pipelines=concurrent_pipelines)
-
-        self.deleteFiles(f"{self.minio_bucket_path}/{self.id}/tmp")
-
-        return out
-
-    def deleteFiles(self, prefix):
+    def delete_files(self, prefix):
         objects_to_delete = self.minioclient.list_objects(
             self.bucket, prefix=prefix, recursive=True)
         for obj in objects_to_delete:
@@ -427,49 +249,27 @@ else:
         if concurrent_pipelines:
             self.concurrent_pipelines = concurrent_pipelines
 
-    def wait_for_pipelines(self, workflowNames, numberToWait=None):
+    def is_workflow_finished(self, workflow_name):
+        try:
+            workflow = self.kubeapi.read_namespaced_pod_status(
+                name=workflow_name,
+                namespace=self.namespace)
 
-        if (numberToWait == None):
-            numberToWait = len(workflowNames)
+            status = workflow.status.phase
 
-        finished = []
+            if (status == "Succeeded"):
+                self.kubeapi.delete_namespaced_pod(workflow_name, self.namespace)
+                return True
 
-        while len(finished) < numberToWait:
+            elif (status == "Failed" or status == "Error"):
+                raise Exception(f"Workflow '{workflow_name}' has failed")
 
-            for workflowName in workflowNames:
-                if (workflowName not in finished):
-                    workflow = None
+        except Exception as e:
+            if (e.__class__.__name__ == "ApiException" and e.status == 404):
+                None
+            else:
+                raise e
 
-                    try:
-                        workflow = self.kubeapi.read_namespaced_pod_status(
-                            name=workflowName,
-                            namespace=self.namespace)
+        return False
 
-                        status = workflow.status.phase
 
-                        if (status == "Succeeded"):
-
-                            print(
-                                f"\nWorkflow '{workflowName}' has finished."u'\u2713')
-
-                            api_response = self.kubeapi.delete_namespaced_pod(
-                                workflowName, self.namespace)
-
-                            finished.append(workflowName)
-
-                        elif (status == "Failed" or status == "Error"):
-
-                            raise Exception(
-                                f"Workflow {workflowName} has failed")
-
-                    except Exception as e:
-                        if (e.__class__.__name__ == "ApiException" and e.status == 404):
-                            None
-                        else:
-                            raise e
-
-            sleep(0.1)
-
-            #print(".", end="", sep="", flush=True)
-
-        return finished
