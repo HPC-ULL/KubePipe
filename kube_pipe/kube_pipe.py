@@ -7,6 +7,8 @@ from .pipeline import Pipeline, PipelineKubernetes
 import atexit
 from kubernetes import client, config
 
+from typing import Union
+
 
 class KubePipe():
 
@@ -20,7 +22,8 @@ class KubePipe():
                  namespace="argo",
                  use_gpu=False,
                  argo_ip = None,
-                 default_pipeline : Pipeline = PipelineKubernetes
+                 default_pipeline : Pipeline = PipelineKubernetes,
+                 default_image : Union[str,None] = None
                  ):
 
         self.pooling_interval = 0.1
@@ -41,6 +44,8 @@ class KubePipe():
 
         self.minio_bucket_path = minio_bucket_path
 
+        self.node_selector = None
+
         config.load_kube_config()
         self.kube_api = client.CoreV1Api()
 
@@ -55,7 +60,7 @@ class KubePipe():
             if(isinstance(pipe, Pipeline)):
                 pass
             elif(isinstance(pipe, list)):
-                pipe = default_pipeline(*pipe)
+                pipe = default_pipeline(*pipe, image=default_image)
             else:
                 raise ValueError("Unknown pipeline ", pipe)
            
@@ -107,7 +112,7 @@ class KubePipe():
 
             pipeline = self.pipelines[index]
 
-            running.append(pipeline.run(X,y,operation=operation,measure_energy=measure_energy,resources=resources,node_selector=node_selector,additional_args=additional_args))
+            running.add(pipeline.run(X,y,operation=operation,measure_energy=measure_energy,resources=resources,node_selector=node_selector,additional_args=additional_args))
             print(f"Launched pipeline '{pipeline.workflow_name}' ({pipeline.backend})")
 
 
@@ -143,8 +148,8 @@ class KubePipe():
         return self.models
 
     def fit(self, X, y, resources=None, concurrent_pipelines=None, measure_energy=False, node_selector=None, **kwargs):
-        self.run_pipelines(X, y, "fit(X,y,**add_args)", resources=resources, concurrent_pipelines=concurrent_pipelines,
-                           return_output=False, measure_energy=measure_energy, additional_args=kwargs, node_selector=node_selector)
+        self.models = self.run_pipelines(X, y, "fit(X,y,**add_args)", resources=resources, concurrent_pipelines=concurrent_pipelines,
+                           return_output=True, measure_energy=measure_energy, additional_args=kwargs, node_selector=node_selector)
         self.fitted = True
         self.clean_pipelines_tmp()
 
@@ -261,7 +266,7 @@ class KubePipe():
 
         while len(finished) < numberToWait:
             for pipeline in running:
-                if(not pipeline.is_running()):
+                if(pipeline not in finished and not pipeline.is_running()):
                     finished.add(pipeline)
                     print(f"Finished pipeline '{pipeline.workflow_name}' ({pipeline.backend})")
             

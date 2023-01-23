@@ -29,13 +29,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class PipelineArgo(Pipeline):
 
-    def __init__(self,
-            *funcs,
-            image: str = "",
-            use_gpu: bool = False,
-            ):
-        super().__init__(*funcs,image=image,use_gpu=use_gpu)
-        self.backend = "argo"
 
     def initialize(
         self,
@@ -55,6 +48,9 @@ class PipelineArgo(Pipeline):
     ):
 
         super().initialize(*args,namespace=namespace, kube_api=kube_api, registry_ip=registry_ip)
+
+        self.backend = "argo"
+
 
         self.function_resources = function_resources
 
@@ -127,10 +123,17 @@ class PipelineArgo(Pipeline):
         return energy
 
 
-        return self.download_variable(f'energy', prefix =self.id)
+        
 
     def get_output(self):
-        return self.download_variable('output', prefix = self.id)
+        output = self.download_variable('output', prefix = self.id)
+        if(isinstance(output,bytes)):
+            with open("/tmp/out.h5", "wb") as f:
+                f.write(output)
+            from tensorflow.keras.models import load_model
+            output = load_model("/tmp/out.h5",compile = False)
+        return output
+
 
     def run(
         self,
@@ -143,8 +146,13 @@ class PipelineArgo(Pipeline):
         additional_args: Dict = {}
 
     ):
-
         fit_data = operation.startswith("fit")
+
+        if(self.resources != None):
+            resources = self.resources
+
+        if(self.node_selector != None):
+            node_selector = self.node_selector
 
 
         self.upload_variable(X,"X", prefix = "tmp")
@@ -181,7 +189,7 @@ class PipelineArgo(Pipeline):
                 
 
         templates = workflow["spec"]["templates"]
-        workflow["metadata"]["generateName"] = run_name+str(self.id)
+        workflow["metadata"]["generateName"] = f"pipeline-{run_name}-{self.id}-{str(uuid.uuid4())[:3]}"
 
         templates[0]["steps"] = []
 
@@ -224,28 +232,32 @@ def work():
 
     if(hasattr(func,"predict")):
         output = func.{operation}
+        
         try:
+            
             from scikeras.wrappers import BaseWrapper
-            if(isinstance(output,BaseWrapper)):
-                output.model_.save('/tmp/out',save_format="h5")
-            else:
-                with open('/tmp/out', \'wb\') as handle:
-                    pickle.dump(output, handle)
+
+            if({fit_data} and isinstance(output,BaseWrapper)):
+                output.model_.save("/tmp/out",save_format="h5")
+                with open ("/tmp/out", "rb") as f:
+                    output = f.read()
+
         except ModuleNotFoundError:
-            with open('/tmp/out', \'wb\') as handle:
-                pickle.dump(output, handle)
+            pass
+
+        with open('/tmp/out', \'wb\') as handle:
+            pickle.dump(output, handle)
 
     else:
         if({fit_data}):
             func=func.fit(X)
 
-        
         X = func.transform(X)
 
         with open('/tmp/X', \'wb\') as handle:
             pickle.dump(X, handle)
 
-    if({fit_data}):
+    if({fit_data} and not isinstance(func,BaseWrapper)):
         with open('/tmp/func', \'wb\') as handle:
             pickle.dump(func, handle)
 
@@ -323,7 +335,7 @@ else:
 
 
             if(resources is not None):
-                template["container"]["resources"]  = {"limits" : resources}
+                template["container"]["resources"]  = resources
 
             template["container"]["args"][0] = code
 

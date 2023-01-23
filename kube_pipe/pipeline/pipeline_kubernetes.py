@@ -21,13 +21,6 @@ from typing import Union, Dict
 
 class PipelineKubernetes(Pipeline):
 
-    def __init__(self,
-            *funcs,
-            image: str = "",
-            use_gpu: bool = False,
-            ):
-        super().__init__(*funcs,image=image,use_gpu=use_gpu)
-        self.backend = "kubernetes"
 
     def initialize(
         self,
@@ -44,6 +37,8 @@ class PipelineKubernetes(Pipeline):
     ):
 
         super().initialize(*args,namespace=namespace, kube_api=kube_api, registry_ip=registry_ip)
+
+        self.backend = "kubernetes"
 
         if not minio_ip:
             minio_ip = self.get_service_ip("minio", self.namespace) + ":9000"
@@ -96,7 +91,13 @@ class PipelineKubernetes(Pipeline):
         return self.download_variable(f'energy', prefix =self.id)
 
     def get_output(self):
-        return self.download_variable('output', prefix = self.id)
+        output = self.download_variable('output', prefix = self.id)
+        if(isinstance(output,bytes)):
+            with open("/tmp/out.h5", "wb") as f:
+                f.write(output)
+            from tensorflow.keras.models import load_model
+            output = load_model("/tmp/out.h5",compile = False)
+        return output
 
     def run(
         self,
@@ -109,8 +110,13 @@ class PipelineKubernetes(Pipeline):
         additional_args: Dict = {}
     ):
 
+        fit_data = operation.startswith("fit")
+
         if(self.resources != None):
             resources = self.resources
+
+        if(self.node_selector != None):
+            node_selector = self.node_selector
 
 
         self.upload_variable(X,"X", prefix = "tmp")
@@ -121,7 +127,6 @@ class PipelineKubernetes(Pipeline):
         if(additional_args):
             self.upload_variable(additional_args, f"add_args", prefix = f"tmp/{self.id}")
 
-        fit_data = operation.startswith("fit")
 
         run_name = str.lower(str(type(self.funcs[-1] ).__name__)) + "-" +  operation[:operation.index("(")]
 
@@ -187,19 +192,21 @@ def work():
         pipe = download_object("pipe", prefix = "{self.id}/")
 
     output = pipe.{operation}
-
+   
     try:
         from scikeras.wrappers import BaseWrapper
 
         if({fit_data} and isinstance(output[-1],BaseWrapper)):
-            output = output[-1].model_
-            output.save('/tmp/out',save_format="h5")
-        else:
-            with open('/tmp/out', \'wb\') as handle:
-                pickle.dump(output, handle)
+
+            output[-1].model_.save("/tmp/out",save_format="h5")
+            with open ("/tmp/out", "rb") as f:
+                output = f.read()
+
     except ModuleNotFoundError:
-        with open('/tmp/out', \'wb\') as handle:
-            pickle.dump(output, handle)
+        pass
+
+    with open('/tmp/out', \'wb\') as handle:
+        pickle.dump(output, handle)
 
 
     minioclient.fput_object(
@@ -238,7 +245,7 @@ else:
             name=f"{self.id}",
             image=self.image,
             command=command,
-            resources=client.V1ResourceRequirements(limits=resources),
+            resources=client.V1ResourceRequirements(**resources),
             volume_mounts=volume_mounts,
             security_context=client.V1SecurityContext(
                 privileged=measure_energy)

@@ -27,15 +27,17 @@ class Pipeline(ABC):
 
     def __init__(self,
                  *funcs,
-                 image: str = "",
+                 image: Union[bool,None] = None,
                  use_gpu: Union[bool,None] = None,
                  resources : Union[Dict,None] = None,
+                 node_selector : Union[Dict,None] = None,
                  **kwargs):
 
         self.image = image
         self.funcs = funcs
         self.use_gpu = use_gpu
         self.resources = resources
+        self.node_selector = node_selector
         self.backend = ""
    
 
@@ -63,14 +65,14 @@ class Pipeline(ABC):
             kube_api = client.CoreV1Api()
         self.kube_api = kube_api
 
-        if(self.image == ""):
+        if(self.image is None):
             self.image = self.create_image(self.funcs)
 
 
         return self
 
     @abstractmethod
-    def run(self,*args,**kwargs):
+    def run():
         pass
 
     @abstractmethod

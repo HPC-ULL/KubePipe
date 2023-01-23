@@ -17,21 +17,12 @@ from typing import Union, Dict
 
 import threading
 
+import sys
+
+import zlib
+
 class PipelineTCP(Pipeline):
 
-    def __init__(self,
-            *funcs,
-            image: str = "",
-            use_gpu: bool = False,
-            ):
-        super().__init__(*funcs,image=image,use_gpu=use_gpu)
-        self.backend = "tcp"
-
-        self.delim = b'`%$@`'
-
-        self.buffer_size = 1024
-
-        self.currentPort = None
 
 
     def initialize(
@@ -41,10 +32,21 @@ class PipelineTCP(Pipeline):
         kube_api: Union[client.CoreV1Api, None] = None,
         registry_ip: Union[str, None] = None,
         use_gpu : Union[bool,None] = False,
+        compress_data :  bool = False,
         **kwargs
     ):
 
         super().initialize(*args,namespace=namespace, kube_api=kube_api, registry_ip=registry_ip)
+
+        self.compress_data = compress_data
+
+        self.backend = "tcp"
+
+        self.delim = b'`%$@`'
+
+        self.buffer_size = 1024*4
+
+        self.currentPort = None
 
         if(self.use_gpu is None):
             self.use_gpu = use_gpu
@@ -80,18 +82,24 @@ class PipelineTCP(Pipeline):
         #Receive output
         output = self.receive_output(socket)
 
+
+
         if(isinstance(output,tuple)):
             self.output, self.energy = output
         else:
             self.output = output
 
+        if(isinstance(self.output,bytes)):
+            with open("/tmp/out.h5", "wb") as f:
+                f.write(self.output)
+            from tensorflow.keras.models import load_model
+            self.output = load_model("/tmp/out.h5",compile = False)
+
+
         if(fit_data):
             self.fitted_pipeline = self.output
 
         return output
-
-
-
 
 
     def create_tcp_service(self,type,selector,serviceName, nodePort=None):
@@ -124,11 +132,21 @@ class PipelineTCP(Pipeline):
             )
 
 
+    def send_var(self,s, var):
+        data = pickle.dumps(var,byref=False) + self.delim
+
+        if(self.compress_data):
+            data = zlib.compress(data)
+
+        s.sendall(data)
 
 
     def send_vars(self, s, x, y , pipe, add_args):
-        data = pickle.dumps(x, byref=False) + self.delim + pickle.dumps(y,byref=False) + self.delim + pickle.dumps(pipe,byref=False) + self.delim +  pickle.dumps(add_args,byref=False) + self.delim
-        s.sendall(data)
+        self.send_var(s,x)
+        self.send_var(s,y)
+        self.send_var(s,pipe)
+        self.send_var(s,add_args)
+
 
     def receive_output(self,s):
         data = b""
@@ -175,6 +193,8 @@ class PipelineTCP(Pipeline):
                 if(ping != b"p"):
                     raise Exception("Not connected")
 
+                s.settimeout(None)
+
                 return s
 
             except Exception as e:
@@ -190,12 +210,17 @@ class PipelineTCP(Pipeline):
         node_selector: Union[Dict, None] = None,
         additional_args: Dict = {}
     ):
+
+        self.buffer_size = sys.getsizeof(X)//20
+
        
+        fit_data = operation.startswith("fit")
+
         if(self.resources != None):
             resources = self.resources
 
-
-        fit_data = operation.startswith("fit")
+        if(self.node_selector != None):
+            node_selector = self.node_selector
 
         run_name = str.lower(str(type(self.funcs[-1] ).__name__)) + "-" +  operation[:operation.index("(")]
 
@@ -217,7 +242,6 @@ SERVER_PORT = 3000
               
 BUFFER_SIZE = {self.buffer_size}
 
-
 delim = {self.delim}
 
 print("Initialize socket")
@@ -232,6 +256,8 @@ from sklearn.pipeline import make_pipeline
 
 import os
 
+import zlib
+
 def receiveVars(s):
     total_vars = 4
     data = b""
@@ -243,14 +269,32 @@ def receiveVars(s):
             split_data = data.split(delim)
             split_data[0] = data+split_data[0]
             for i in range(len(split_data)-1):
-                outputs.append(pickle.loads(split_data[i]))
+                var = pickle.loads(split_data[i])
+                if({self.compress_data}):
+                    var = zlib.decompress(var)
+                outputs.append(var)
+
             data = split_data[-1]
         
     return outputs
 
-def sendOutPut(s, out):
+def sendOutPut(s, output):
     print("Sending output")
-    s.sendall(pickle.dumps(out))
+   
+    try:
+        from scikeras.wrappers import BaseWrapper
+
+        if({fit_data} and isinstance(output[-1],BaseWrapper)):
+
+            output[-1].model_.save("/tmp/out",save_format="h5")
+            with open ("/tmp/out", "rb") as f:
+                output = f.read()
+
+    except ModuleNotFoundError:
+        pass
+
+
+    s.sendall(pickle.dumps(output))
 
 client_socket, address = s.accept() 
 print("Connected " + str(address))
@@ -262,8 +306,6 @@ def work():
     print("Receiving variables")
     X,y,funcs,add_args = receiveVars(client_socket)
     print("Variables received")
-    print(funcs,add_args)
-
 
     if({fit_data}):
         pipe = make_pipeline(*funcs)
@@ -298,7 +340,7 @@ s.close()
             name=f"{self.id}",
             image=self.image,
             command=command,
-            resources=client.V1ResourceRequirements(limits=resources),
+            resources=client.V1ResourceRequirements(**resources),
             volume_mounts=volume_mounts,
             security_context=client.V1SecurityContext(
                 privileged=measure_energy)
