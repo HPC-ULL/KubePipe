@@ -285,7 +285,7 @@ else:
             status = workflow.status.phase
 
             if (status == "Succeeded"):
-                self.kube_api.delete_namespaced_pod(self.workflow_name, self.namespace)
+                self.kube_api.delete_namespaced_pod(self.workflow_name, self.namespace, async_req = False)
                 return False
 
             elif (status == "Failed" or status == "Error"):

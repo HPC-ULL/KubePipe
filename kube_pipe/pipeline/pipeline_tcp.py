@@ -258,6 +258,15 @@ import os
 
 import zlib
 
+import tensorflow as tf
+
+physical_devices = tf.config.list_physical_devices('GPU')
+try:
+  tf.config.experimental.set_memory_growth(physical_devices[0], True)
+except:
+  # Invalid device or cannot modify virtual devices once initialized.
+  pass
+
 def receiveVars(s):
     total_vars = 4
     data = b""
@@ -381,7 +390,7 @@ s.close()
             status = workflow.status.phase
 
             if (status == "Succeeded"):
-                self.kube_api.delete_namespaced_pod(self.workflow_name, self.namespace)
+                self.kube_api.delete_namespaced_pod(self.workflow_name, self.namespace, async_req = False)
                 self.kube_api.delete_namespaced_service( self.service_name, self.namespace)
                 return False
 

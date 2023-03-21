@@ -375,7 +375,7 @@ else:
             if(getattr(status,"phase",None) is not None):
 
                 if(status["phase"] == "Succeeded"):
-                    self.argo_api.delete_workflow(namespace=self.namespace, name = self.workflow_name)
+                    self.argo_api.delete_workflow(namespace=self.namespace, name = self.workflow_name, delete_options_grace_period_Seconds="0")
                     return False
 
                 elif(status["phase"] == "Failed"):
