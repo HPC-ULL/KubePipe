@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
   name = 'kube_pipe',        
   packages = ['kube_pipe'],  
-  version = '0.1.1',      
+  version = '0.1.2',      
   license='MIT',       
   description = 'Tool to paralelize execution of multiple pipelines of machine learning using kubernetes',   
   author = 'Daniel Suárez Labena',                 
@@ -11,11 +11,11 @@ setup(
   download_url = 'https://github.com/alu0101040882/kubernetes-ml-pipeline-TFM',   
   keywords = ['Kubernetes','Machine learning'],   
   install_requires=[           
-        'argo-workflows==6.3.0rc2',
+        'argo-workflows',
         'kubernetes',
         'minio',
         'PyYAML',
-        'scikit_learn==1.0.2',
+        'scikit_learn',
         'torch',
         'dill'
       ],

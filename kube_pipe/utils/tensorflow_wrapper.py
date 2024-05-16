@@ -5,8 +5,6 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 
 
 
-
-
 class TensorflowWrapper(BaseEstimator, ClassifierMixin):
 
     def __init__(self, model, loss_fn = None, optimizer = None, train_fn = None, epochs = 5, device = None):

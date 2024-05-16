@@ -1,6 +1,6 @@
 
 
-from .pipeline import Pipeline
+from .pipeline_base import PipelineBase
 
 from kubernetes import client, config, watch
 
@@ -27,7 +27,7 @@ from argo_workflows.exceptions import NotFoundException
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class PipelineArgo(Pipeline):
+class PipelineArgo(PipelineBase):
 
 
     def initialize(

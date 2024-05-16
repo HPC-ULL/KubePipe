@@ -1,6 +1,6 @@
 
 
-from .pipeline import Pipeline
+from .pipeline_base import PipelineBase
 
 from kubernetes import client, config, watch
 
@@ -19,13 +19,13 @@ import uuid
 from typing import Union, Dict
 
 
-class PipelineKubernetes(Pipeline):
+class PipelineKubernetes(PipelineBase):
 
 
     def initialize(
         self,
         *args,
-        namespace: str = "argo",
+        namespace: str = "kubepipe",
         kube_api: Union[client.CoreV1Api, None] = None,
         registry_ip: Union[str, None] = None,
         minio_ip:  Union[str, None] = None,
@@ -43,15 +43,34 @@ class PipelineKubernetes(Pipeline):
         if not minio_ip:
             minio_ip = self.get_service_ip("minio", self.namespace) + ":9000"
 
-        artifactsConfig = yaml.safe_load(self.kube_api.read_namespaced_config_map(
-            "artifact-repositories", self.namespace).data["default-v1"])["s3"]
+        # artifactsConfig = yaml.safe_load(self.kube_api.read_namespaced_config_map(
+        #     "artifact-repositories", self.namespace).data["default-v1"])["s3"]
 
+        # if not access_key:
+        #     access_key = base64.b64decode(self.kube_api.read_namespaced_secret(
+        #         artifactsConfig["accessKeySecret"]["name"], self.namespace).data[artifactsConfig["accessKeySecret"]["key"]]).decode("utf-8")
+        # if not secret_key:
+        #     secret_key = base64.b64decode(self.kube_api.read_namespaced_secret(
+        #         artifactsConfig["secretKeySecret"]["name"], self.namespace).data[artifactsConfig["secretKeySecret"]["key"]]).decode("utf-8")
         if not access_key:
-            access_key = base64.b64decode(self.kube_api.read_namespaced_secret(
-                artifactsConfig["accessKeySecret"]["name"], self.namespace).data[artifactsConfig["accessKeySecret"]["key"]]).decode("utf-8")
+            try:
+                access_key_data = self.kube_api.read_namespaced_secret(
+                    "my-minio-cred", self.namespace).data["accesskey"]
+                access_key = base64.b64decode(access_key_data).decode("utf-8")
+            except KeyError:
+                print("Access key not found in secret")
+            except client.exceptions.ApiException as e:
+                print(f"Error retrieving access key: {e}")
+
         if not secret_key:
-            secret_key = base64.b64decode(self.kube_api.read_namespaced_secret(
-                artifactsConfig["secretKeySecret"]["name"], self.namespace).data[artifactsConfig["secretKeySecret"]["key"]]).decode("utf-8")
+            try:
+                secret_key_data = self.kube_api.read_namespaced_secret(
+                    "my-minio-cred", self.namespace).data["secretkey"]
+                secret_key = base64.b64decode(secret_key_data).decode("utf-8")
+            except KeyError:
+                print("Secret key not found in secret")
+            except client.exceptions.ApiException as e:
+                print(f"Error retrieving secret key: {e}")
 
         self.minio_bucket_path = minio_bucket_path
 
@@ -62,10 +81,10 @@ class PipelineKubernetes(Pipeline):
             minio_ip,
             access_key=access_key,
             secret_key=secret_key,
-            secure=not artifactsConfig["insecure"]
+            secure = False
         )
 
-        self.bucket = artifactsConfig["bucket"]
+        self.bucket = "kubepipe"
 
         if not self.minioclient.bucket_exists(self.bucket):
             self.minioclient.make_bucket(self.bucket)
@@ -128,7 +147,7 @@ class PipelineKubernetes(Pipeline):
             self.upload_variable(additional_args, f"add_args", prefix = f"tmp/{self.id}")
 
 
-        run_name = str.lower(str(type(self.funcs[-1] ).__name__)) + "-" +  operation[:operation.index("(")]
+        run_name = str.lower(str(type(self.funcs[-1] ).__name__)) + "-" +  operation[:operation.index("(")].replace("_","")
 
         code = f"""
 import dill as pickle
@@ -142,7 +161,6 @@ import numpy as np
 import sys
 import os
 from time import sleep
-
 
 minioclient = Minio(
             'minio:9000',
@@ -251,10 +269,18 @@ else:
                 privileged=measure_energy)
         )
 
-        spec = client.V1PodSpec(restart_policy="Never", containers=[
-                                container], node_selector=node_selector, volumes=volumes)
 
-        workflowname = f"pipeline-{run_name}-{self.id}-{str(uuid.uuid4())[:3]}"
+        toleration = client.V1Toleration(
+            key="app",
+            operator="Equal",
+            value="kubepipe",
+            effect="NoSchedule"
+        )
+
+        spec = client.V1PodSpec(restart_policy="Never", containers=[
+                                container], node_selector=node_selector, volumes=volumes, tolerations=[toleration])
+
+        workflowname = f"pipeline-{self.backend}-{run_name}-{self.id}-{str(uuid.uuid4())[:3]}"
 
         body = client.V1Job(
             api_version="v1",
@@ -283,6 +309,7 @@ else:
                 namespace=self.namespace)
 
             status = workflow.status.phase
+            self.node = workflow.spec.node_name
 
             if (status == "Succeeded"):
                 self.kube_api.delete_namespaced_pod(self.workflow_name, self.namespace, async_req = False)

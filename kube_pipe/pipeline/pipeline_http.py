@@ -5,9 +5,9 @@ from .pipeline_base import PipelineBase
 from kubernetes import client, config, watch
 
 import dill as pickle
-import socket
 
 from time import sleep
+import time
 
 from kubernetes.client.rest import ApiException
 
@@ -21,8 +21,9 @@ import sys
 
 import zlib
 
-class PipelineTCP(PipelineBase):
+import requests
 
+class PipelineHTTP(PipelineBase):
 
     def initialize(
         self,
@@ -39,11 +40,7 @@ class PipelineTCP(PipelineBase):
 
         self.compress_data = compress_data
 
-        self.backend = "tcp"
-
-        self.delim = b'`%$@`'
-
-        self.buffer_size = 1024*4
+        self.backend = "http"
 
         self.currentPort = None
 
@@ -69,38 +66,76 @@ class PipelineTCP(PipelineBase):
     def manage_workflow(self, X, y, add_args, fit_data):
 
         self.end_comunication = False
+
         self.wait_for_pod_status(self.workflow_name, "Running")
 
         host, port = self.get_lb_ip(self.service_name)
 
-        socket = self.create_socket(host,port)
 
         pipe = self.funcs if fit_data else self.fitted_pipeline
 
         #Send input
-        self.send_vars(socket, X,y, pipe, add_args)
+        # print("Connecting to pod", host, port)
+        output = self.communicate_with_pod(host, port, X, y, pipe, add_args)
 
-        #Receive output
-        output = self.receive_output(socket)
 
         if(isinstance(output,tuple)):
             self.output, self.energy = output
         else:
             self.output = output
 
-        if(isinstance(self.output,bytes)):
-            with open("/tmp/out.h5", "wb") as f:
-                f.write(self.output)
-            from tensorflow.keras.models import load_model
-            self.output = load_model("/tmp/out.h5",compile = False)
+        # if(isinstance(self.output,bytes)):
+        #     with open("/tmp/out.h5", "wb") as f:
+        #         f.write(self.output)
+        #     from tensorflow.keras.models import load_model
+        #     self.output = load_model("/tmp/out.h5",compile = False)
 
 
         if(fit_data):
             self.fitted_pipeline = self.output
 
-        self.end_comunication = False
+        self.end_comunication = True
+
 
         return output
+
+    def wait_for_server(self,host, port, timeout=60, interval=1):
+        start_time = time.time()
+        while True:
+            try:
+                server_url = f"http://{host}:{port}/check_status"
+                response = requests.get(server_url)
+                if response.status_code == 200:
+                    return True
+            except Exception as e:
+                pass 
+
+            if time.time() - start_time >= timeout:
+                raise Exception("Timeout reached. Server did not become active.")  
+            
+            time.sleep(interval)
+
+    def communicate_with_pod(self, host, port, X, y, funcs, add_args):
+        try:
+            if not self.wait_for_server(host, port):
+                return None
+
+            data = pickle.dumps([X, y, funcs, add_args])
+            url = f"http://{host}:{port}"
+            headers = {'Content-Type': 'application/octet-stream'}
+            response = requests.post(url, data=data, headers=headers)
+            
+            if response.status_code == 200:
+                output_data = response.content
+
+                output = pickle.loads(output_data)
+                return output
+            else:
+                print("Error:", response.status_code)
+                return None
+        except Exception as e:
+            print("Error:", e)
+            return None
 
 
     def create_tcp_service(self,type,selector,serviceName, nodePort=None):
@@ -133,44 +168,13 @@ class PipelineTCP(PipelineBase):
             )
 
 
-    def send_var(self,s, var):
-        data = pickle.dumps(var,byref=False) + self.delim
-
-        if(self.compress_data):
-            data = zlib.compress(data)
-
-        s.sendall(data)
+  
 
 
-    def send_vars(self, s, x, y , pipe, add_args):
-        self.send_var(s,x)
-        self.send_var(s,y)
-        self.send_var(s,pipe)
-        self.send_var(s,add_args)
-
-
-    def receive_output(self,s):
-        data = b""
-
-        while(True):
-            bytes_read = s.recv(self.buffer_size)
-            if not bytes_read:
-                break
-            
-            data+=bytes_read
-
-        s.close()        
-        if(data == b""):
-            print("Output is empty")
-            return
-
-        return pickle.loads(data)
 
     def get_lb_ip(self, service_name):
-
-
-        
         ip = self.get_node_ip(self.get_random_node())
+        # ip = "localhost"
 
         while True:
             api_response = self.kube_api.read_namespaced_service(
@@ -198,7 +202,6 @@ class PipelineTCP(PipelineBase):
 
         if 'docker-desktop' in node_name:
             return 'localhost'
-        
         while True:
             api_response = self.kube_api.read_node(node_name)
             addresses = api_response.status.addresses
@@ -208,33 +211,18 @@ class PipelineTCP(PipelineBase):
             sleep(1)
 
 
-
-    def create_socket(self,host,port):
-        while True:
-            try:
-                s = socket.create_connection(((host, port)))
-                s.settimeout(1.0)
-                ping = s.recv(10)
-                if(ping != b"p"):
-                    raise Exception("Not connected")
-
-                s.settimeout(None)
-
-                return s
-
-            except Exception as e:
-                sleep(0.1)
-
     def run(
         self,
         X: any,
         y: any,
         operation: str = "fit(X,y,**add_args)",
         measure_energy: bool = False,
-        resources: Union[Dict, None] = None,
+        resources: Union[Dict, None] = {},
         node_selector: Union[Dict, None] = None,
         additional_args: Dict = {}
     ):
+        
+
 
         self.buffer_size = sys.getsizeof(X)//20
 
@@ -259,100 +247,106 @@ class PipelineTCP(PipelineBase):
             self.currentPort+=1
 
         code = f"""
-
-import socket
-
-SERVER_HOST = "0.0.0.0"
-SERVER_PORT = 3000
-              
-BUFFER_SIZE = {self.buffer_size}
-
-delim = {self.delim}
-
-print("Initialize socket")
-s = socket.socket()
-s.bind((SERVER_HOST, SERVER_PORT))
-s.listen(1)
-print("Socket Listening")
-
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import dill as pickle
-
 from sklearn.pipeline import make_pipeline
+import sys
+class MyHTTPHandler(BaseHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.output_sent = False
 
-import os
+    def do_POST(self):
+        try:
+            content_length = int(self.headers['Content-Length'])
+            request_data = self.rfile.read(content_length)
 
-import zlib
+            # Receiving variables
+            print("Receiving variables")
+            X, y, funcs, add_args = self.receive_vars(request_data)
+            print("Variables received")
 
-def receiveVars(s, total_vars, BUFFER_SIZE, delim, compress_data):
-    outputs = []
-    while len(outputs) < total_vars:
-        data = b""
-        while delim not in data:
-            bytes_read = s.recv(BUFFER_SIZE)
-            if not bytes_read:
-                break
-            data += bytes_read
-        
-        if not data:
-            break
+            if {fit_data}:
+                pipe = make_pipeline(*funcs)
+            else:
+                pipe = funcs
 
-        split_data = data.split(delim)
-        for i in range(len(split_data) - 1):
-            var = pickle.loads(split_data[i])
-            if compress_data:
-                var = zlib.decompress(var)
-            outputs.append(var)
-        delim_index = data.index(delim)
-        data = data[delim_index + len(delim):]
-        
-    return outputs
+            print(pipe)
 
-def sendOutPut(s, output, fit_data = {fit_data}):
-    print("Sending output")
+            print("Executing operation {operation}")
+
+            output = pipe.{operation}
+
+            if {measure_energy}:
+                output_data = self.send_output(measure_function(output))
+            else:
+                output_data = self.send_output(output)
+
+            print("Operation executed")
+            self.send_response(200)
+            self.send_header('Content-type', 'application/octet-stream')
+            self.end_headers()
+            self.wfile.write(output_data)
+
+            print("Output sent")
+
+            self.output_sent = True
+            sys.exit()
+        except Exception as e:
+            print("Error:", e)
+            sys.exit()
+
+    def do_GET(self):
+        if self.path == '/check_status':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Server is active')
+        else:
+            self.send_response(404)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Not found')
+
+    def receive_vars(self, request_data):
+        data = pickle.loads(request_data)
+        X, y, funcs, add_args = data
+        return X, y, funcs, add_args
+
+    def send_output(self, output):
+        print("Sending output", output)
+        # try:
+        #     from scikeras.wrappers import BaseWrapper
+        #     if isinstance(output, BaseWrapper):
+        #         output.model_.save("/tmp/out", save_format='h5')
+        #         with open("/tmp/out", "rb") as f:
+        #             output = f.read()
+        # except ModuleNotFoundError:
+        #     pass
+
+        return pickle.dumps(output)
+
+class StoppableHTTPServer(HTTPServer):
+    def run(self):
+        print('Starting server...')
+        self.serve_forever()
+
+    def stop(self):
+        print('Stopping server...')
+        self.shutdown()
+
+def run(server_class=StoppableHTTPServer, handler_class=MyHTTPHandler, port=3000):
+    server_address = ('', port)
+    httpd = server_class(server_address, handler_class)
     try:
-        from scikeras.wrappers import BaseWrapper
+        httpd.run()
+    finally:
+        httpd.stop()
 
-        if fit_data and isinstance(output[-1], BaseWrapper):
-            output[-1].model_.save("/tmp/out", save_format="h5")
-            with open("/tmp/out", "rb") as f:
-                output = f.read()
-    except ModuleNotFoundError:
-        pass
-
-    s.sendall(pickle.dumps(output))
-    
-client_socket, address = s.accept() 
-print("Connected " + str(address))
-
-print("Ping host")
-client_socket.send(b"p")
-
-def work():
-    print("Receiving variables")
-    X,y,funcs,add_args = receiveVars(client_socket, 4, BUFFER_SIZE, delim, {self.compress_data})
-    print("Variables received")
-
-    if({fit_data}):
-        pipe = make_pipeline(*funcs)
-    else:
-        pipe = funcs
-
-    print(pipe)
-
-    output = pipe.{operation}
-
-    return output
-
-
-if({measure_energy}):
-    from pyeml import measure_function
-    sendOutPut(client_socket, measure_function(work))
-else:
-    sendOutPut(client_socket, work())
-    
-s.close()
-
+if __name__ == '__main__':
+    run()
 """
+
         volumes = []
         volume_mounts = []
 
@@ -396,6 +390,7 @@ s.close()
 
 
     def is_running(self):
+
         if(not self.workflow_name):
             print("Pipeline has not run yet")
             return False
@@ -406,6 +401,7 @@ s.close()
                 namespace=self.namespace)
 
             status = workflow.status.phase
+
             self.node = workflow.spec.node_name
 
             if (status == "Succeeded" and self.end_comunication):

@@ -5,6 +5,8 @@ metadata:
   labels:
     app: minio
   name: my-minio-cred
+  namespace: kubepipe
+
 stringData:
   accesskey: admin
   secretkey: password
@@ -16,6 +18,7 @@ metadata:
   labels:
     app: minio
   name: minio
+  namespace: kubepipe
 spec:
   type: "LoadBalancer"
   ports:
@@ -36,6 +39,8 @@ metadata:
   labels:
     app: minio
   name: minio
+  namespace: kubepipe
+
 spec:
   selector:
     matchLabels:

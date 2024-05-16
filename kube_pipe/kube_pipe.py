@@ -2,28 +2,33 @@ from time import sleep
 
 import uuid
 
-from .pipeline import Pipeline, PipelineKubernetes
+from kube_pipe.pipeline import PipelineBase, PipelineKubernetes, Pipeline
 
 import atexit
 from kubernetes import client, config
 
 from typing import Union
+from kube_pipe.model_selection import KubeGridSearch
 
+import random
 
 class KubePipe():
-
     def __init__(self,
                  *args,
                  minio_ip=None,
                  registry_ip=None,
+                 registry_svc=None,
+
                  access_key=None,
                  secret_key=None,
                  minio_bucket_path=".kubetmp",
-                 namespace="argo",
+                 namespace="kubepipe",
                  use_gpu=False,
                  argo_ip = None,
-                 default_pipeline : Pipeline = PipelineKubernetes,
-                 default_image : Union[str,None] = None
+                 default_pipeline : PipelineBase = PipelineKubernetes,
+                 default_image : Union[str,None] = None,
+                 kube_config = {},
+                 scheduler = None
                  ):
 
         self.pooling_interval = 0.1
@@ -46,31 +51,79 @@ class KubePipe():
 
         self.node_selector = None
 
-        config.load_kube_config()
+        self.scheduler = scheduler
+
+        config.load_kube_config(**kube_config)
         self.kube_api = client.CoreV1Api()
+
+
+        if not registry_svc:
+            registry_svc = "private-repository-k8s"
+
 
         if not registry_ip:
             registry_ip = self.get_service_ip(
-                "private-repository-k8s", self.namespace) + ":5000"
+                registry_svc, self.namespace) + ":5000"
 
         self.registry_ip = registry_ip
 
         self.pipelines = []
+
+        unprocessed_pipelines = []
         for pipe in args:
-            if(isinstance(pipe, Pipeline)):
+            if(isinstance(pipe, PipelineBase)):
                 pass
             elif(isinstance(pipe, list)):
                 pipe = default_pipeline(*pipe, image=default_image)
             else:
                 raise ValueError("Unknown pipeline ", pipe)
-           
-            self.pipelines.append(pipe.initialize(namespace = self.namespace, kube_api = self.kube_api, registry_ip = self.registry_ip, minio_ip = minio_ip, access_key = access_key, secret_key = secret_key, argo_ip = argo_ip, minio_bucket_path = self.minio_bucket_path + "/" + self.id, use_gpu = self.use_gpu))
+            unprocessed_pipelines.append(pipe)
+        
+        while unprocessed_pipelines:
+            pipe = unprocessed_pipelines.pop(0)
+
+            grid_search = False
+            for i , func in enumerate(pipe.funcs):
+                if isinstance(func, KubeGridSearch):
+                    grid_search = True
+                    for estimator in func.generate_estimators():
+                        unprocessed_pipelines.append(type(pipe)(*pipe.funcs[:i], estimator, *pipe.funcs[i+1:]))
+                    break
+                
+            if not grid_search:
+                #Scheduler
+                if(self.scheduler):
+                    if(self.scheduler["strategy"] == "round-robin"):
+                        pipe.node_selector = self.scheduler["nodes"][len(self.pipelines) % len(self.scheduler["nodes"])]
+                    elif(self.scheduler["strategy"] == "random"):
+                        pipe.node_selector = self.scheduler["nodes"][random.randint(0,len(self.scheduler["nodes"])-1)]
+                    else:
+                        raise ValueError("Unknown scheduler strategy")
+                    # print(f"Pipeline '{pipe}' will run on node '{pipe.node_selector['node-name']}'")
+                    
+                self.pipelines.append(pipe.initialize(namespace = self.namespace, kube_api = self.kube_api, registry_ip = self.registry_ip, minio_ip = minio_ip, access_key = access_key, secret_key = secret_key, argo_ip = argo_ip, minio_bucket_path = self.minio_bucket_path + "/" + self.id, use_gpu = self.use_gpu))
+            
 
         atexit.register(self.clean_pipelines)
 
    
     def get_consumed(self):
         return self.energy
+    
+    
+    def get_service_ip(self, service_name, namespace):
+        ingress = self.kube_api.read_namespaced_service(
+            service_name, namespace).status.load_balancer.ingress[0]
+        if ingress.ip is None:
+            if ingress.hostname is not None:
+                ip = ingress.hostname
+            else:
+                raise ValueError(
+                    f"Ip from service {service_name} can't be retrieved")
+        else:
+            ip = ingress.ip
+        return ip
+
 
     def get_total_consumed(self):
         consumed = self.get_consumed()
@@ -154,6 +207,15 @@ class KubePipe():
         self.clean_pipelines_tmp()
 
         return self
+    
+    def fit_transform(self, X, y, resources=None, concurrent_pipelines=None, measure_energy=False, node_selector=None, **kwargs):
+        self.models = self.run_pipelines(X, y, "fit_transform(X,y,**add_args)", resources=resources, concurrent_pipelines=concurrent_pipelines,
+                           return_output=True, measure_energy=measure_energy, additional_args=kwargs, node_selector=node_selector)
+        self.fitted = True
+        self.clean_pipelines_tmp()
+
+        return self
+
 
     def score(self, X, y, resources=None, pipeIndex=None, concurrent_pipelines=None):
 
@@ -268,7 +330,7 @@ class KubePipe():
             for pipeline in running:
                 if(pipeline not in finished and not pipeline.is_running()):
                     finished.add(pipeline)
-                    print(f"Finished pipeline '{pipeline.workflow_name}' ({pipeline.backend})")
+                    print(f"Finished pipeline '{pipeline.workflow_name}' ({pipeline.backend}) on node '{pipeline.node}'")
             
             sleep(self.pooling_interval)
 
